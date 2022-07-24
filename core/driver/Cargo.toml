@@ -1,0 +1,11 @@
+[package]
+name = "ko-core-driver"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+ckb-hash = "0.101"
+ckb-jsonrpc-types = "0.104"
+ko-protocol = { path = "../../protocol" }
