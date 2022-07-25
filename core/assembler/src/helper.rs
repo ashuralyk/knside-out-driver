@@ -5,13 +5,13 @@ use ko_protocol::ckb_types::packed::{CellOutput, Script};
 use ko_protocol::ckb_types::prelude::{Builder, Entity, Pack};
 use ko_protocol::ckb_types::{bytes::Bytes, core::ScriptHashType};
 use ko_protocol::types::error::KoError;
-use ko_protocol::{KoResult, is_mol_flag_2, mol_flag_0, mol_flag_1, mol_deployment_raw};
+use ko_protocol::{is_mol_flag_2, mol_deployment_raw, mol_flag_0, mol_flag_1, KoResult};
 
 use crate::error::AssemblerError;
 
 pub fn search_project_cell(
     rpc: &mut IndexerRpcClient,
-    project_id_args: &[u8; 32]
+    project_id_args: &[u8; 32],
 ) -> KoResult<LiveCell> {
     let project_typescript = Script::new_builder()
         .code_hash(TYPE_ID_CODE_HASH.pack())
@@ -25,7 +25,11 @@ pub fn search_project_cell(
     };
     let result = rpc
         .get_cells(search_key, Order::Asc, 1.into(), None)
-        .map_err(|_| KoError::from(AssemblerError::MissProjectDeploymentCell(project_id_args.clone())))?;
+        .map_err(|_| {
+            KoError::from(AssemblerError::MissProjectDeploymentCell(
+                project_id_args.clone(),
+            ))
+        })?;
     if let Some(cell) = result.objects.first() {
         Ok((cell.clone()).into())
     } else {

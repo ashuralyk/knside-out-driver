@@ -1,7 +1,8 @@
-use crate::derive_more::Constructor;
+use derive_more::Constructor;
+use ckb_types::bytes::Bytes;
 
 #[derive(Constructor)]
 pub struct KoExecuteReceipt {
-    pub outputs_json_data: Vec<String>,
-    pub required_ckbs: Vec<u64>,
+    pub outputs_json_data: Vec<Bytes>,
+    pub required_payments: Vec<u64>
 }

@@ -1,10 +1,10 @@
-use ko_protocol::ckb_sdk::rpc::ckb_indexer::IndexerRpcClient;
-use ko_protocol::ckb_types::prelude::{Builder, Entity, Pack, Unpack};
+use ko_protocol::ckb_sdk::rpc::ckb_indexer::{IndexerRpcClient, Order, ScriptType, SearchKey};
 use ko_protocol::ckb_types::bytes::Bytes;
-use ko_protocol::ckb_types::core::{Capacity, TransactionView, DepType};
-use ko_protocol::ckb_types::packed::{CellInput, CellOutput, OutPoint, Script, CellDep, WitnessArgs};
+use ko_protocol::ckb_types::core::{Capacity, DepType, TransactionView};
+use ko_protocol::ckb_types::packed::{CellDep, CellInput, CellOutput, Script, WitnessArgs};
+use ko_protocol::ckb_types::prelude::{Builder, Entity, Pack, Unpack};
 use ko_protocol::traits::Assembler;
-use ko_protocol::types::assembler::{KoAssembleReceipt, KoProject, KoRequest};
+use ko_protocol::types::assembler::{KoAssembleReceipt, KoCellOutput, KoProject, KoRequest};
 use ko_protocol::KoResult;
 
 mod error;
@@ -15,7 +15,7 @@ use error::AssemblerError;
 pub struct AssemblerImpl {
     rpc_client: IndexerRpcClient,
     project_id: [u8; 32],
-    project_code_hash: [u8; 32]
+    project_code_hash: [u8; 32],
 }
 
 impl AssemblerImpl {
@@ -23,7 +23,7 @@ impl AssemblerImpl {
         AssemblerImpl {
             rpc_client: IndexerRpcClient::new(indexer_url),
             project_id: project_id.clone(),
-            project_code_hash: code_hash.clone()
+            project_code_hash: code_hash.clone(),
         }
     }
 }
@@ -31,9 +31,9 @@ impl AssemblerImpl {
 impl Assembler for AssemblerImpl {
     fn prepare_ko_transaction_project_celldep(
         &mut self,
-        project_deployment_args: &[u8; 32]
+        project_deployment_args: &[u8; 32],
     ) -> KoResult<KoProject> {
-        let project_cell = 
+        let project_cell =
             helper::search_project_cell(&mut self.rpc_client, project_deployment_args)?;
         let project_celldep = CellDep::new_builder()
             .out_point(project_cell.out_point)
@@ -45,12 +45,15 @@ impl Assembler for AssemblerImpl {
 
     fn generate_ko_transaction_with_inputs_and_celldeps(
         &mut self,
-        txs: &Vec<TransactionView>,
-        cell_deps: &Vec<CellDep>
+        cell_number: u8,
+        cell_deps: &Vec<CellDep>,
     ) -> KoResult<(TransactionView, KoAssembleReceipt)> {
         // find project global cell
-        let global_cell =
-            helper::search_global_cell(&mut self.rpc_client, &self.project_code_hash, &self.project_id)?;
+        let global_cell = helper::search_global_cell(
+            &mut self.rpc_client,
+            &self.project_code_hash,
+            &self.project_id,
+        )?;
         let mut ko_tx = TransactionView::new_advanced_builder()
             .input(
                 CellInput::new_builder()
@@ -61,41 +64,71 @@ impl Assembler for AssemblerImpl {
             .build();
         // fill transaction inputs and collect KnsideOut requests
         let mut requests = vec![];
-        for tx in txs {
-            for i in 0..tx.outputs().len() {
-                if let Some(output) = tx.outputs().get(i) {
-                    if helper::check_valid_request(&output, &self.project_code_hash, &self.project_id) {
-                        let cell_data = tx.outputs_data().get(i).unwrap().raw_data();
+        let search_key = SearchKey {
+            script: helper::make_personal_script(&self.project_code_hash, &self.project_id).into(),
+            script_type: ScriptType::Type,
+            filter: None,
+        };
+        let mut total_inputs_capacity: u64 = global_cell.output.capacity().unpack();
+        let mut after = None;
+        while requests.len() < cell_number as usize {
+            let result = self
+                .rpc_client
+                .get_cells(search_key.clone(), Order::Asc, 30.into(), after)
+                .map_err(|_| AssemblerError::MissProjectRequestCell)?;
+            result
+                .objects
+                .into_iter()
+                .map(|cell| {
+                    let output = cell.output.into();
+                    if helper::check_valid_request(
+                        &output,
+                        &self.project_code_hash,
+                        &self.project_id,
+                    ) {
                         let flag_2 =
                             ko_protocol::mol_flag_2_raw(&output.lock().args().raw_data().to_vec())
                                 .unwrap();
-                        let lock_script = Script::from_slice(&flag_2.caller_lockscript().raw_data())
-                            .map_err(|_| AssemblerError::UnsupportedCallerScriptFormat)?;
-                        let capacity = output.capacity().unpack();
-                        requests.push(
-                            KoRequest::new(
-                                cell_data,
-                                flag_2.function_call().raw_data(), 
-                                lock_script,
-                                capacity
-                            )
-                        );
-                        let out_point = OutPoint::new_builder()
-                            .tx_hash(tx.hash())
-                            .index((i as u32).pack())
-                            .build();
-                        ko_tx = tx
+                        let lock_script =
+                            Script::from_slice(&flag_2.caller_lockscript().raw_data())
+                                .map_err(|_| AssemblerError::UnsupportedCallerScriptFormat)?;
+                        let payment = {
+                            let capacity: u64 = output.capacity().unpack();
+                            total_inputs_capacity += capacity;
+                            let exact_capacity =
+                                Capacity::bytes(output.as_bytes().len() + cell.output_data.len())
+                                    .unwrap()
+                                    .as_u64();
+                            capacity - exact_capacity
+                        };
+                        requests.push(KoRequest::new(
+                            cell.output_data.into_bytes(),
+                            flag_2.function_call().raw_data(),
+                            lock_script,
+                            payment,
+                        ));
+                        ko_tx = ko_tx
                             .as_advanced_builder()
-                            .input(CellInput::new_builder().previous_output(out_point).build())
+                            .input(
+                                CellInput::new_builder()
+                                    .previous_output(cell.out_point.into())
+                                    .build(),
+                            )
                             .build();
                     }
-                }
+                    Ok(())
+                })
+                .collect::<KoResult<_>>()?;
+            if result.last_cursor.is_empty() {
+                break;
             }
+            after = Some(result.last_cursor);
         }
         let receipt = KoAssembleReceipt::new(
             requests,
             global_cell.output_data,
-            global_cell.output.calc_lock_hash().unpack()
+            global_cell.output.lock().clone(),
+            total_inputs_capacity,
         );
         Ok((ko_tx, receipt))
     }
@@ -103,53 +136,52 @@ impl Assembler for AssemblerImpl {
     fn fill_ko_transaction_with_outputs(
         &self,
         mut tx: TransactionView,
-        outputs_data: &Vec<Bytes>,
+        cell_outputs: &Vec<KoCellOutput>,
         inputs_capacity: u64,
-        lock_scripts: &Vec<Script>,
     ) -> KoResult<TransactionView> {
-        // have an initial check of input params
-        if lock_scripts.len() != outputs_data.len() || lock_scripts.len() != tx.inputs().len() {
-            return Err(
-                AssemblerError::ScriptsAndOutputsDataMismatch(
-                    lock_scripts.len(),
-                    outputs_data.len(),
-                ).into()
-            );
-        }
         // collect output cells and their total capacity
         let mut outputs = vec![];
         let mut outputs_capacity = 0u64;
-        lock_scripts.iter().enumerate().for_each(|(i, lock)| {
+        let mut outputs_data = vec![];
+        cell_outputs.iter().enumerate().for_each(|(i, output)| {
             let type_ = if i == 0 {
                 helper::make_global_script(&self.project_code_hash, &self.project_id)
             } else {
                 helper::make_personal_script(&self.project_code_hash, &self.project_id)
             };
-            if outputs_data[i].is_empty() {
+            if output.data.is_empty() {
                 outputs.push(
                     CellOutput::new_builder()
-                        .lock(lock.clone())
-                        .build_exact_capacity(Capacity::zero())
+                        .lock(output.lock_script.clone())
+                        .build_exact_capacity(Capacity::shannons(output.payment))
                         .unwrap(),
                 );
             } else {
+                let capacity = {
+                    let capacity = Capacity::bytes(output.data.len()).unwrap();
+                    capacity
+                        .safe_add(Capacity::shannons(output.payment))
+                        .unwrap()
+                };
                 outputs.push(
                     CellOutput::new_builder()
-                        .lock(lock.clone())
+                        .lock(output.lock_script.clone())
                         .type_(Some(type_).pack())
-                        .build_exact_capacity(Capacity::bytes(outputs_data[i].len()).unwrap())
+                        .build_exact_capacity(capacity)
                         .unwrap(),
                 );
             }
             let capacity: u64 = outputs.last().unwrap().capacity().unpack();
             outputs_capacity += capacity;
+            outputs_data.push(output.data.clone());
         });
         // firstly check inputs/outputs capacity
         if inputs_capacity <= outputs_capacity {
             return Err(AssemblerError::TransactionCapacityError(
                 inputs_capacity,
                 outputs_capacity,
-            ).into());
+            )
+            .into());
         }
         // complete transaction outputs
         let fee = Capacity::bytes(1).unwrap().as_u64();
@@ -174,7 +206,8 @@ impl Assembler for AssemblerImpl {
             return Err(AssemblerError::TransactionCapacityError(
                 inputs_capacity,
                 tx.outputs_capacity().unwrap().as_u64(),
-            ).into());
+            )
+            .into());
         }
         Ok(tx)
     }
@@ -182,15 +215,12 @@ impl Assembler for AssemblerImpl {
     fn complete_ko_transaction_with_signature(
         &self,
         tx: TransactionView,
-        signature: Bytes
+        signature: Bytes,
     ) -> TransactionView {
         let witness = WitnessArgs::new_builder()
             .lock(Some(signature).pack())
             .build()
             .as_bytes();
-        tx
-            .as_advanced_builder()
-            .witness(witness.pack())
-            .build()
+        tx.as_advanced_builder().witness(witness.pack()).build()
     }
 }

@@ -3,6 +3,9 @@ use ko_protocol::types::error::{ErrorType, KoError};
 
 #[derive(Display, Debug)]
 pub enum DriverError {
+    #[display(fmt = "Rpc get_tip error: value = {}", _0)]
+    ErrorFetchingBlockTip(String),
+
     #[display(fmt = "The block number is invalid, value = {}", _0)]
     InvalidBlockNumber(u64),
 

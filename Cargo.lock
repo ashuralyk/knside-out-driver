@@ -832,9 +832,7 @@ dependencies = [
 name = "ko-core"
 version = "0.1.0"
 dependencies = [
- "ko-core-assembler",
- "ko-core-driver",
- "ko-core-executor",
+ "ko-protocol",
 ]
 
 [[package]]
@@ -867,6 +865,9 @@ name = "ko-driver"
 version = "0.1.0"
 dependencies = [
  "ko-core",
+ "ko-core-assembler",
+ "ko-core-driver",
+ "ko-core-executor",
  "ko-protocol",
 ]
 

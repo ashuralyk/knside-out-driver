@@ -14,6 +14,14 @@ pub enum ExecutorError {
 
     #[display(fmt = "Invalid request lua code, code = {}, reason = {}", _0, _1)]
     ErrorLoadRequestLuaCode(String, String),
+
+    #[display(
+        fmt = "The input_ckb({}) is less than the cost_ckb({}) in cell({})",
+        _0,
+        _1,
+        _2
+    )]
+    InsufficientRequiredCkb(u64, u64, usize),
 }
 
 impl std::error::Error for ExecutorError {}
