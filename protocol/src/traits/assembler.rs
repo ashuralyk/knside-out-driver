@@ -1,19 +1,19 @@
-use ckb_types::{bytes::Bytes, core::TransactionView};
 use ckb_types::packed::CellDep;
+use ckb_types::{bytes::Bytes, core::TransactionView, H256};
 
-use crate::types::assembler::{KoAssembleReceipt, KoProject, KoCellOutput};
+use crate::types::assembler::{KoAssembleReceipt, KoCellOutput, KoProject};
 use crate::KoResult;
 
 pub trait Assembler {
     fn prepare_ko_transaction_project_celldep(
         &mut self,
-        project_deployment_args: &[u8; 32]
+        project_deployment_args: &H256,
     ) -> KoResult<KoProject>;
 
     fn generate_ko_transaction_with_inputs_and_celldeps(
         &mut self,
         cell_number: u8,
-        cell_deps: &Vec<CellDep>
+        cell_deps: &Vec<CellDep>,
     ) -> KoResult<(TransactionView, KoAssembleReceipt)>;
 
     fn fill_ko_transaction_with_outputs(
@@ -26,6 +26,6 @@ pub trait Assembler {
     fn complete_ko_transaction_with_signature(
         &self,
         tx: TransactionView,
-        signature: Bytes
+        signature: Bytes,
     ) -> TransactionView;
 }

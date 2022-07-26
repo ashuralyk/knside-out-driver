@@ -1,8 +1,8 @@
 use ko_protocol::ckb_sdk::rpc::ckb_indexer::{IndexerRpcClient, Order, ScriptType, SearchKey};
-use ko_protocol::ckb_types::bytes::Bytes;
 use ko_protocol::ckb_types::core::{Capacity, DepType, TransactionView};
 use ko_protocol::ckb_types::packed::{CellDep, CellInput, CellOutput, Script, WitnessArgs};
 use ko_protocol::ckb_types::prelude::{Builder, Entity, Pack, Unpack};
+use ko_protocol::ckb_types::{bytes::Bytes, H256};
 use ko_protocol::traits::Assembler;
 use ko_protocol::types::assembler::{KoAssembleReceipt, KoCellOutput, KoProject, KoRequest};
 use ko_protocol::KoResult;
@@ -14,12 +14,12 @@ use error::AssemblerError;
 
 pub struct AssemblerImpl {
     rpc_client: IndexerRpcClient,
-    project_id: [u8; 32],
-    project_code_hash: [u8; 32],
+    project_id: H256,
+    project_code_hash: H256,
 }
 
 impl AssemblerImpl {
-    pub fn new(indexer_url: &str, project_id: &[u8; 32], code_hash: &[u8; 32]) -> AssemblerImpl {
+    pub fn new(indexer_url: &str, project_id: &H256, code_hash: &H256) -> AssemblerImpl {
         AssemblerImpl {
             rpc_client: IndexerRpcClient::new(indexer_url),
             project_id: project_id.clone(),
@@ -31,10 +31,10 @@ impl AssemblerImpl {
 impl Assembler for AssemblerImpl {
     fn prepare_ko_transaction_project_celldep(
         &mut self,
-        project_deployment_args: &[u8; 32],
+        project_deployment_args: &H256,
     ) -> KoResult<KoProject> {
         let project_cell =
-            helper::search_project_cell(&mut self.rpc_client, project_deployment_args)?;
+            helper::search_project_cell(&mut self.rpc_client, &project_deployment_args)?;
         let project_celldep = CellDep::new_builder()
             .out_point(project_cell.out_point)
             .dep_type(DepType::Code.into())

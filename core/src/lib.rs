@@ -43,18 +43,6 @@ where
         }
     }
 
-    pub fn set_project_dep(mut self, project_type_args: &[u8; 32]) -> KoResult<Self> {
-        self.project_dep = self
-            .ko_assembler
-            .prepare_ko_transaction_project_celldep(project_type_args)?;
-        Ok(self)
-    }
-
-    pub fn set_transaction_dep(mut self, cell_deps: &Vec<CellDep>) -> Self {
-        self.transaction_dep = cell_deps.clone();
-        self
-    }
-
     pub fn set_drive_interval(mut self, interval: Duration) -> Self {
         self.drive_interval = interval;
         self
@@ -65,18 +53,28 @@ where
         self
     }
 
-    pub async fn start(mut self) -> KoResult<()> {
+    pub async fn start(
+        mut self,
+        project_type_args: &H256,
+        project_cell_deps: &Vec<(H256, u32)>,
+    ) -> KoResult<()> {
+        self.project_dep = self
+            .ko_assembler
+            .prepare_ko_transaction_project_celldep(project_type_args)?;
+        self.transaction_dep = self
+            .ko_driver
+            .prepare_ko_transaction_normal_celldeps(project_cell_deps)?;
         let mut interval = tokio::time::interval(self.drive_interval);
 
         loop {
-            let (hash, _) = tokio::join!(async { self.drive_one() }, interval.tick());
+            let (hash, _) = tokio::join!(async { self.drive() }, interval.tick());
             if let Some(hash) = hash? {
                 println!("[Core] knside-out tansaction hash = {}", hash);
             }
         }
     }
 
-    fn drive_one(&mut self) -> KoResult<Option<H256>> {
+    fn drive(&mut self) -> KoResult<Option<H256>> {
         let (tx, receipt) = self
             .ko_assembler
             .generate_ko_transaction_with_inputs_and_celldeps(

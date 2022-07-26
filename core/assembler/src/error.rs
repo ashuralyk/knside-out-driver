@@ -1,13 +1,14 @@
+use ko_protocol::ckb_types::H256;
 use ko_protocol::derive_more::Display;
 use ko_protocol::types::error::{ErrorType, KoError};
 
 #[derive(Display, Debug)]
 pub enum AssemblerError {
-    #[display(fmt = "Project cell not found, project_id_args = {:?}", _0)]
-    MissProjectDeploymentCell([u8; 32]),
+    #[display(fmt = "Project cell not found, project_id_args = {}", _0)]
+    MissProjectDeploymentCell(H256),
 
-    #[display(fmt = "Global cell not found, project_id = {:?}", _0)]
-    MissProjectGlobalCell([u8; 32]),
+    #[display(fmt = "Global cell not found, project_id = {}", _0)]
+    MissProjectGlobalCell(H256),
 
     #[display(fmt = "Request cell not found")]
     MissProjectRequestCell,
@@ -18,11 +19,7 @@ pub enum AssemblerError {
     #[display(fmt = "Caller lock_script format is not supported")]
     UnsupportedCallerScriptFormat,
 
-    #[display(
-        fmt = "Transaction inputs and outputs capacity are mismatched ({}:{})",
-        _0,
-        _1
-    )]
+    #[display(fmt = "Transaction capacity mismatch ({}:{})", _0, _1)]
     TransactionCapacityError(u64, u64),
 }
 

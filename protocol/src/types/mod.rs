@@ -1,4 +1,4 @@
-pub mod error;
-pub mod generated;
 pub mod assembler;
+pub mod error;
 pub mod executor;
+pub mod generated;
