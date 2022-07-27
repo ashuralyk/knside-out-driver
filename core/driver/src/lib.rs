@@ -1,13 +1,13 @@
 use std::vec;
 
 use ckb_hash::new_blake2b;
-use ckb_jsonrpc_types::TransactionView as JsonTxView;
+use ckb_jsonrpc_types::{OutputsValidator, TransactionView as JsonTxView};
 use ko_protocol::ckb_sdk::{CkbRpcClient, SECP256K1};
 use ko_protocol::ckb_types::packed::{CellDep, OutPoint, WitnessArgs};
 use ko_protocol::ckb_types::prelude::{Builder, Entity, Pack};
 use ko_protocol::ckb_types::{bytes::Bytes, core::TransactionView, H256};
 use ko_protocol::secp256k1::{Message, SecretKey};
-use ko_protocol::serde_json::to_string_pretty;
+use ko_protocol::serde_json::to_string;
 use ko_protocol::traits::Driver;
 use ko_protocol::KoResult;
 
@@ -78,11 +78,14 @@ impl Driver for DriverImpl {
     fn send_ko_transaction(&mut self, tx: TransactionView) -> KoResult<H256> {
         let hash = self
             .rpc_client
-            .send_transaction(tx.data().into(), None)
+            .send_transaction(
+                tx.data().into(),
+                Some(OutputsValidator::Passthrough),
+            )
             .map_err(|err| {
                 DriverError::TransactionSendError(
                     err.to_string(),
-                    to_string_pretty(&JsonTxView::from(tx)).unwrap(),
+                    to_string(&JsonTxView::from(tx)).unwrap(),
                 )
             })?;
         Ok(hash)

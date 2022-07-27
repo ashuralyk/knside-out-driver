@@ -909,13 +909,17 @@ dependencies = [
 name = "ko-driver"
 version = "0.1.0"
 dependencies = [
+ "ckb-hash 0.101.8",
+ "ckb-jsonrpc-types",
  "clap",
+ "hex",
  "ko-config",
  "ko-core",
  "ko-core-assembler",
  "ko-core-driver",
  "ko-core-executor",
  "ko-protocol",
+ "mlua",
 ]
 
 [[package]]

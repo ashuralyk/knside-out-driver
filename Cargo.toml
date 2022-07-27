@@ -8,9 +8,25 @@ edition = "2021"
 [dependencies]
 clap = { version = "3.1", features = ["cargo"] }
 
-ko-protocol = { path = "./protocol" }
 ko-config = { path = "./config" }
 ko-core = { path = "./core" }
 ko-core-assembler = { path = "./core/assembler" }
 ko-core-driver = { path = "./core/driver" }
 ko-core-executor = { path = "./core/executor" }
+ko-protocol = { path = "./protocol" }
+
+[workspace]
+members = [
+    "core",
+    "core/assembler",
+    "core/driver",
+    "core/executor",
+    
+    "protocol",
+]
+
+[dev-dependencies]
+ckb-hash = "0.101"
+ckb-jsonrpc-types = "0.104"
+hex = "0.4"
+mlua = { version = "0.8", features = ["lua54", "serialize", "vendored"] }

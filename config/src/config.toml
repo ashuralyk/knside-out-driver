@@ -1,20 +1,20 @@
 # type_args is script_args which generates project type_id
-project_type_args = ""
+project_type_args = "7c59e85f104b95feb342f416b7eb4c8e829d680adf9a73dad521d0dba94faf63"
 
 # the unique hash for presenting project cell
 project_type_id = ""
 
 # the deployer of this project
-project_owner_privkey = ""
+project_owner_privkey = "8d929e962f940f75aa32054f19a5ea2ce70ae30bfe4ff7cf2dbed70d556265df"
 
 # knside-out contract code_hash
-project_code_hash = ""
+project_code_hash = "e72d02d5a2dbf1b893e5b9ae17602395533b6b918cee67d234669c24b41cc4f7"
 
 # url for connecting CKB node
-ckb_url = ""
+ckb_url = "http://127.0.0.1:8114"
 
 # url for connecting ckb indexer service
-ckb_indexer_url = ""
+ckb_indexer_url = "http://127.0.0.1:8116"
 
 # necessary cell deps
 project_cell_deps = [

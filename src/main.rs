@@ -6,6 +6,9 @@ use ko_core_executor::ExecutorImpl;
 use ko_protocol::secp256k1::SecretKey;
 use ko_protocol::tokio;
 
+#[cfg(test)]
+mod deployer;
+
 #[tokio::main]
 async fn main() {
     let matches = Command::new("knside-out")
