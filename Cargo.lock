@@ -869,7 +869,6 @@ name = "ko-config"
 version = "0.1.0"
 dependencies = [
  "ko-protocol",
- "serde",
  "toml",
 ]
 
@@ -909,17 +908,14 @@ dependencies = [
 name = "ko-driver"
 version = "0.1.0"
 dependencies = [
- "ckb-hash 0.101.8",
- "ckb-jsonrpc-types",
  "clap",
- "hex",
  "ko-config",
  "ko-core",
  "ko-core-assembler",
  "ko-core-driver",
  "ko-core-executor",
  "ko-protocol",
- "mlua",
+ "ko-rpc",
 ]
 
 [[package]]
@@ -933,8 +929,29 @@ dependencies = [
  "lazy_static",
  "molecule",
  "secp256k1",
+ "serde",
  "serde_json",
  "tokio",
+]
+
+[[package]]
+name = "ko-rpc"
+version = "0.1.0"
+dependencies = [
+ "ko-protocol",
+ "ko-rpc-backend",
+]
+
+[[package]]
+name = "ko-rpc-backend"
+version = "0.1.0"
+dependencies = [
+ "ckb-hash 0.101.8",
+ "ckb-jsonrpc-types",
+ "hex",
+ "ko-core-driver",
+ "ko-protocol",
+ "mlua",
 ]
 
 [[package]]

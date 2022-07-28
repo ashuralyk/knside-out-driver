@@ -1,5 +1,6 @@
+use ko_protocol::ckb_sdk::constants::TYPE_ID_CODE_HASH;
 use ko_protocol::ckb_sdk::rpc::ckb_indexer::{IndexerRpcClient, Order, ScriptType, SearchKey};
-use ko_protocol::ckb_types::core::{Capacity, DepType, TransactionView};
+use ko_protocol::ckb_types::core::{Capacity, DepType, TransactionView, ScriptHashType};
 use ko_protocol::ckb_types::packed::{CellDep, CellInput, CellOutput, Script, WitnessArgs};
 use ko_protocol::ckb_types::prelude::{Builder, Entity, Pack, Unpack};
 use ko_protocol::ckb_types::{bytes::Bytes, H256};
@@ -19,10 +20,17 @@ pub struct AssemblerImpl {
 }
 
 impl AssemblerImpl {
-    pub fn new(indexer_url: &str, project_id: &H256, code_hash: &H256) -> AssemblerImpl {
+    pub fn new(indexer_url: &str, project_args: &H256, code_hash: &H256) -> AssemblerImpl {
+        let project_id = Script::new_builder()
+            .code_hash(TYPE_ID_CODE_HASH.pack())
+            .hash_type(ScriptHashType::Type.into())
+            .args(project_args.as_bytes().pack())
+            .build()
+            .calc_script_hash()
+            .unpack();
         AssemblerImpl {
             rpc_client: IndexerRpcClient::new(indexer_url),
-            project_id: project_id.clone(),
+            project_id: project_id,
             project_code_hash: code_hash.clone(),
         }
     }

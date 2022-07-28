@@ -9,7 +9,7 @@ use ko_protocol::ckb_types::{bytes::Bytes, core::TransactionView, H256};
 use ko_protocol::secp256k1::{Message, SecretKey};
 use ko_protocol::serde_json::to_string;
 use ko_protocol::traits::Driver;
-use ko_protocol::KoResult;
+use ko_protocol::{KoResult, types::config::KoCellDep};
 
 mod error;
 use error::DriverError;
@@ -31,18 +31,19 @@ impl DriverImpl {
 impl Driver for DriverImpl {
     fn prepare_ko_transaction_normal_celldeps(
         &mut self,
-        project_cell_deps: &Vec<(H256, u32)>,
+        project_cell_deps: &Vec<KoCellDep>,
     ) -> KoResult<Vec<CellDep>> {
         let cell_deps = project_cell_deps
             .iter()
-            .map(|(hash, index)| {
+            .map(|celldep| {
                 self.rpc_client
-                    .get_transaction(hash.clone())
+                    .get_transaction(celldep.transaction_hash.clone())
                     .map_err(|err| {
-                        DriverError::ErrorFetchingCelldepTransaction(err.to_string(), hash.clone())
+                        DriverError::ErrorFetchingCelldepTransaction(err.to_string(), celldep.transaction_hash.clone())
                     })?;
                 let cell_dep = CellDep::new_builder()
-                    .out_point(OutPoint::new(hash.pack(), *index))
+                    .out_point(OutPoint::new(celldep.transaction_hash.pack(), celldep.cell_index))
+                    .dep_type(celldep.dep_type.into())
                     .build();
                 Ok(cell_dep)
             })

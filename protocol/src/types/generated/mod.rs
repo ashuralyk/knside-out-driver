@@ -37,10 +37,10 @@ fn mol_project_info(
         .build()
 }
 
-pub fn mol_deployment(lua_code: &str) -> generated::Deployment {
+pub fn mol_deployment(lua_code: &[u8]) -> generated::Deployment {
     let project_info = mol_project_info("", "", "", "");
     generated::Deployment::new_builder()
-        .code(mol_string(lua_code.as_bytes()))
+        .code(mol_string(lua_code))
         .project(project_info)
         .build()
 }

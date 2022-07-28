@@ -1,9 +1,6 @@
 # type_args is script_args which generates project type_id
 project_type_args = "7c59e85f104b95feb342f416b7eb4c8e829d680adf9a73dad521d0dba94faf63"
 
-# the unique hash for presenting project cell
-project_type_id = ""
-
 # the deployer of this project
 project_owner_privkey = "8d929e962f940f75aa32054f19a5ea2ce70ae30bfe4ff7cf2dbed70d556265df"
 
@@ -19,7 +16,9 @@ ckb_indexer_url = "http://127.0.0.1:8116"
 # necessary cell deps
 project_cell_deps = [
     # omni
-    { transaction_hash = "", cell_index = 0 },
+    { transaction_hash = "", cell_index = 0, dep_type = 0 },
     # secp256k1
-    { transaction_hash = "", cell_index = 0 },
+    { transaction_hash = "", cell_index = 0, dep_type = 1 },
+    # knside-out
+    { transaction_hash = "", cell_index = 0, dep_type = 0 },
 ]

@@ -6,6 +6,7 @@ use ko_protocol::ckb_types::H256;
 use ko_protocol::tokio;
 use ko_protocol::traits::{Assembler, Driver, Executor};
 use ko_protocol::types::assembler::{KoCellOutput, KoProject};
+use ko_protocol::types::config::KoCellDep;
 use ko_protocol::KoResult;
 
 pub struct Context<A, E, D>
@@ -56,7 +57,7 @@ where
     pub async fn start(
         mut self,
         project_type_args: &H256,
-        project_cell_deps: &Vec<(H256, u32)>,
+        project_cell_deps: &Vec<KoCellDep>,
     ) -> KoResult<()> {
         self.project_dep = self
             .ko_assembler

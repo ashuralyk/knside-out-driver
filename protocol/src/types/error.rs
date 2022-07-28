@@ -7,6 +7,8 @@ pub enum ErrorType {
     Driver,
     Executor,
     Config,
+    Deployer,
+    Requester,
 }
 
 #[derive(Debug, Constructor, Display)]

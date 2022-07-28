@@ -1,0 +1,470 @@
+use std::collections::HashMap;
+use std::str::FromStr;
+
+use ko_protocol::ckb_sdk::rpc::ckb_indexer::{Order, ScriptType, SearchKey, SearchKeyFilter};
+use ko_protocol::ckb_sdk::{Address, CkbRpcClient, IndexerRpcClient};
+use ko_protocol::ckb_types::core::{Capacity, TransactionBuilder, TransactionView};
+use ko_protocol::ckb_types::packed::{
+    CellDep, CellInput, CellOutput, OutPoint, Script, Transaction,
+};
+use ko_protocol::ckb_types::prelude::{Builder, Entity, Pack, Unpack};
+use ko_protocol::ckb_types::{bytes::Bytes, H256};
+use ko_protocol::tokio::sync::Mutex;
+use ko_protocol::traits::Backend;
+use ko_protocol::types::config::KoCellDep;
+use ko_protocol::types::generated::{mol_deployment, mol_flag_0};
+use ko_protocol::{async_trait, mol_flag_1, mol_flag_2, KoResult};
+
+#[cfg(test)]
+mod tests;
+
+mod error;
+mod helper;
+use error::BackendError;
+
+pub struct BackendImpl {
+    indexer_url: String,
+    ckb_url: String,
+    cached_transactions: Mutex<HashMap<H256, TransactionView>>,
+}
+
+impl BackendImpl {
+    pub fn new(ckb_url: &str, indexer_url: &str) -> Self {
+        BackendImpl {
+            ckb_url: ckb_url.into(),
+            indexer_url: indexer_url.into(),
+            cached_transactions: Mutex::new(HashMap::new()),
+        }
+    }
+}
+
+#[async_trait]
+impl Backend for BackendImpl {
+    async fn create_project_deploy_digest(
+        &mut self,
+        contract: Bytes,
+        address: String,
+        project_code_hash: &H256,
+        project_cell_deps: &Vec<KoCellDep>,
+    ) -> KoResult<(H256, H256)> {
+        let mut rpc_client = IndexerRpcClient::new(&self.indexer_url);
+
+        // make global of output-data
+        let global_data_json = helper::get_global_json_data(&contract)?;
+        println!("global_data_json = {}", global_data_json);
+
+        // build mock knside-out transaction outputs and data
+        let ckb_address =
+            Address::from_str(&address).map_err(|_| BackendError::InvalidAddressFormat(address))?;
+        let secp256k1_script: Script = ckb_address.payload().into();
+        let global_type_script =
+            helper::build_knsideout_script(project_code_hash, mol_flag_0(&[0u8; 32]).as_slice());
+        let deployment = mol_deployment(&contract);
+        let mut outputs = vec![
+            // project cell
+            CellOutput::new_builder()
+                .lock(secp256k1_script.clone())
+                .type_(helper::build_type_id_script(None, 0))
+                .build_exact_capacity(Capacity::bytes(deployment.as_slice().len()).unwrap())
+                .unwrap(),
+            // global cell
+            CellOutput::new_builder()
+                .lock(secp256k1_script.clone())
+                .type_(Some(global_type_script).pack())
+                .build_exact_capacity(Capacity::bytes(global_data_json.len()).unwrap())
+                .unwrap(),
+            // change cell
+            CellOutput::new_builder()
+                .lock(secp256k1_script.clone())
+                .build_exact_capacity(Capacity::zero())
+                .unwrap(),
+        ];
+        let outputs_data = vec![
+            deployment.as_bytes(),
+            Bytes::from(global_data_json.as_bytes().to_vec()),
+            Bytes::default(),
+        ];
+        let outputs_capacity = helper::calc_outputs_capacity(&outputs, "1.0");
+
+        // fill knside-out transaction inputs
+        let search = SearchKey {
+            script: secp256k1_script.into(),
+            script_type: ScriptType::Lock.into(),
+            filter: None,
+        };
+        let (inputs, inputs_capacity) =
+            helper::fetch_live_cells(&mut rpc_client, search, 0, outputs_capacity)?;
+        println!(
+            "inputs_capacity = {}, outputs_capacity = {}",
+            inputs_capacity, outputs_capacity
+        );
+        if inputs_capacity < outputs_capacity {
+            return Err(BackendError::InternalTransactionAssembleError.into());
+        }
+
+        // rebuild type_id with real input and change
+        let project_type_script = helper::build_type_id_script(Some(&inputs[0]), 0)
+            .to_opt()
+            .unwrap();
+        let project_type_args = {
+            let args: Bytes = project_type_script.args().unpack();
+            H256::from_slice(&args).unwrap()
+        };
+        let project_type_id = project_type_script.calc_script_hash();
+        outputs[0] = outputs[0]
+            .clone()
+            .as_builder()
+            .type_(Some(project_type_script).pack())
+            .build();
+        let global_type_script = helper::build_knsideout_script(
+            project_code_hash,
+            mol_flag_0(&project_type_id.unpack().0).as_slice(),
+        );
+        outputs[1] = outputs[1]
+            .clone()
+            .as_builder()
+            .type_(Some(global_type_script).pack())
+            .build();
+        let change = inputs_capacity - outputs_capacity;
+        outputs[2] = outputs[2]
+            .clone()
+            .as_builder()
+            .build_exact_capacity(Capacity::shannons(change))
+            .unwrap();
+
+        // build knside-out transaction celldeps
+        let cell_deps = project_cell_deps
+            .iter()
+            .map(|cell_dep| cell_dep.into())
+            .collect::<Vec<CellDep>>();
+
+        // build knside-out transaction
+        let tx = TransactionBuilder::default()
+            .inputs(inputs)
+            .outputs(outputs)
+            .outputs_data(outputs_data.pack())
+            .cell_deps(cell_deps)
+            .build();
+
+        // generate transaction digest
+        let digest = helper::get_transaction_digest(&tx);
+        let mut cache = self.cached_transactions.lock().await;
+        cache.insert(digest.clone(), tx);
+
+        // generate project type_id args
+        Ok((digest, project_type_args))
+    }
+
+    async fn create_project_update_digest(
+        &mut self,
+        contract: Bytes,
+        address: String,
+        project_type_args: &H256,
+        project_cell_deps: &Vec<KoCellDep>,
+    ) -> KoResult<H256> {
+        let mut rpc_client = IndexerRpcClient::new(&self.indexer_url);
+
+        // search existed project deployment cell on CKB
+        let project_type_script = helper::recover_type_id_script(project_type_args.as_bytes());
+        let search_key = SearchKey {
+            script: project_type_script.into(),
+            script_type: ScriptType::Type.into(),
+            filter: None,
+        };
+        let result = rpc_client
+            .get_cells(search_key, Order::Asc, 1.into(), None)
+            .map_err(|err| BackendError::IndexerRpcError(err.to_string()))?;
+        if result.objects.is_empty() {
+            return Err(BackendError::MissProjectDeploymentCell(project_type_args.clone()).into());
+        }
+        let deployment_cell = &result.objects[0];
+
+        // build knside-out transaction outputs
+        let secp256k1_script: Script = Address::from_str(&address)
+            .map_err(|_| BackendError::InvalidAddressFormat(address))?
+            .payload()
+            .into();
+        let previous_type_script = deployment_cell.output.type_.as_ref().unwrap();
+        let mut outputs = vec![
+            // new project deployment cell
+            CellOutput::new_builder()
+                .lock(secp256k1_script.clone())
+                .type_(Some(previous_type_script.clone().into()).pack())
+                .build_exact_capacity(Capacity::bytes(contract.len()).unwrap())
+                .unwrap(),
+            // change cell
+            CellOutput::new_builder()
+                .lock(secp256k1_script.clone())
+                .build_exact_capacity(Capacity::zero())
+                .unwrap(),
+        ];
+        let outputs_data = vec![contract, Bytes::new()];
+        let outputs_capacity = helper::calc_outputs_capacity(&outputs, "1.0");
+
+        // fill kinside-out transaction inputs
+        let inputs_capacity: u64 = deployment_cell.output.capacity.into();
+        let search = SearchKey {
+            script: secp256k1_script.into(),
+            script_type: ScriptType::Lock.into(),
+            filter: None,
+        };
+        let (mut inputs, inputs_capacity) =
+            helper::fetch_live_cells(&mut rpc_client, search, inputs_capacity, outputs_capacity)?;
+        println!(
+            "inputs_&capacity = {}, outputs_capacity = {}",
+            inputs_capacity, outputs_capacity
+        );
+        if inputs_capacity < outputs_capacity {
+            return Err(BackendError::InternalTransactionAssembleError.into());
+        }
+        let old_deployment_cell = CellInput::new_builder()
+            .previous_output(deployment_cell.out_point.clone().into())
+            .build();
+        inputs.insert(0, old_deployment_cell);
+
+        // rebuild change output
+        let change = inputs_capacity - outputs_capacity;
+        outputs[1] = outputs[1]
+            .clone()
+            .as_builder()
+            .build_exact_capacity(Capacity::shannons(change))
+            .unwrap();
+
+        // build knside-out transaction celldeps
+        let cell_deps = project_cell_deps
+            .iter()
+            .map(|cell_dep| cell_dep.into())
+            .collect::<Vec<CellDep>>();
+
+        // build knside-out transaction
+        let tx = TransactionBuilder::default()
+            .inputs(inputs)
+            .outputs(outputs)
+            .outputs_data(outputs_data.pack())
+            .cell_deps(cell_deps)
+            .build();
+
+        // generate transaction digest
+        let digest = helper::get_transaction_digest(&tx);
+        let mut cache = self.cached_transactions.lock().await;
+        cache.insert(digest.clone(), tx);
+
+        Ok(digest)
+    }
+
+    async fn create_project_request_digest(
+        &mut self,
+        address: String,
+        previous_cell: Option<OutPoint>,
+        function_call: String,
+        project_code_hash: &H256,
+        project_type_args: &H256,
+        project_cell_deps: &Vec<KoCellDep>,
+    ) -> KoResult<H256> {
+        let mut rpc_client = IndexerRpcClient::new(&self.indexer_url);
+        let mut ckb_client = CkbRpcClient::new(&self.ckb_url);
+
+        // build necessary scripts
+        let project_type_id = helper::recover_type_id_script(project_type_args.as_bytes())
+            .calc_script_hash()
+            .unpack();
+        let secp256k1_script: Script = Address::from_str(&address)
+            .map_err(|_| BackendError::InvalidAddressFormat(address))?
+            .payload()
+            .into();
+        let personal_args = mol_flag_1(&project_type_id.0);
+        let personal_script = helper::build_knsideout_script(&project_code_hash, &personal_args);
+
+        // check previous cell
+        let mut previous_json_data = String::new();
+        let mut inputs_capacity = 0u64;
+        let mut inputs = vec![];
+        if let Some(outpoint) = previous_cell {
+            let tx: Transaction = ckb_client
+                .get_transaction(outpoint.tx_hash().unpack())
+                .map_err(|err| BackendError::CkbRpcError(err.to_string()))?
+                .unwrap()
+                .transaction
+                .unwrap()
+                .inner
+                .into();
+            let tx = tx.into_view();
+            let index: u32 = outpoint.index().unpack();
+            let cell = tx.output_with_data(index as usize);
+            if let Some((cell, data)) = cell {
+                previous_json_data = String::from_utf8(data.to_vec())
+                    .map_err(|_| BackendError::InvalidPrevousCell)?;
+                inputs_capacity = cell.capacity().unpack();
+                inputs.push(CellInput::new_builder().previous_output(outpoint).build());
+            } else {
+                return Err(BackendError::InvalidPrevousCell.into());
+            }
+        }
+
+        // build reqeust transaction outputs
+        let request_args = mol_flag_2(
+            &project_type_id.0,
+            &function_call,
+            secp256k1_script.as_slice(),
+        );
+        let request_script = helper::build_knsideout_script(&project_code_hash, &request_args);
+        let mut outputs = vec![
+            // reqeust cell
+            CellOutput::new_builder()
+                .lock(request_script)
+                .type_(Some(personal_script).pack())
+                .build_exact_capacity(Capacity::bytes(previous_json_data.len()).unwrap())
+                .unwrap(),
+            // change cell
+            CellOutput::new_builder()
+                .lock(secp256k1_script.clone())
+                .build_exact_capacity(Capacity::zero())
+                .unwrap(),
+        ];
+        let outputs_data = vec![
+            Bytes::from(previous_json_data.as_bytes().to_vec()),
+            Bytes::new(),
+        ];
+        let outputs_capacity = helper::calc_outputs_capacity(&outputs, "1.0");
+
+        // fill reqeust transaction inputs
+        let search = SearchKey {
+            script: secp256k1_script.into(),
+            script_type: ScriptType::Lock.into(),
+            filter: None,
+        };
+        let (mut extra_inputs, inputs_capacity) =
+            helper::fetch_live_cells(&mut rpc_client, search, inputs_capacity, outputs_capacity)?;
+        inputs.append(&mut extra_inputs);
+
+        // rebuild change output
+        let change = inputs_capacity - outputs_capacity;
+        outputs[1] = outputs[1]
+            .clone()
+            .as_builder()
+            .build_exact_capacity(Capacity::shannons(change))
+            .unwrap();
+
+        // build knside-out transaction celldeps
+        let cell_deps = project_cell_deps
+            .iter()
+            .map(|cell_dep| cell_dep.into())
+            .collect::<Vec<CellDep>>();
+
+        // build knside-out transaction
+        let tx = TransactionBuilder::default()
+            .inputs(inputs)
+            .outputs(outputs)
+            .outputs_data(outputs_data.pack())
+            .cell_deps(cell_deps)
+            .build();
+
+        // generate transaction digest
+        let digest = helper::get_transaction_digest(&tx);
+        let mut cache = self.cached_transactions.lock().await;
+        cache.insert(digest.clone(), tx);
+
+        Ok(digest)
+    }
+
+    async fn pop_transaction(&mut self, digest: &H256) -> Option<TransactionView> {
+        let mut cache = self.cached_transactions.lock().await;
+        cache.remove(digest)
+    }
+
+    fn search_global_data(
+        &self,
+        project_code_hash: &H256,
+        project_type_args: &H256,
+    ) -> KoResult<String> {
+        let mut rpc_client = IndexerRpcClient::new(&self.indexer_url);
+
+        // build global type_script search key
+        let project_type_id = helper::recover_type_id_script(project_type_args.as_bytes())
+            .calc_script_hash()
+            .unpack();
+        let global_args = mol_flag_0(&project_type_id.0);
+        let global_type_script = helper::build_knsideout_script(project_code_hash, &global_args);
+        let search = SearchKey {
+            script: global_type_script.into(),
+            script_type: ScriptType::Type,
+            filter: None,
+        };
+
+        // search global cell
+        let result = rpc_client
+            .get_cells(search, Order::Asc, 1.into(), None)
+            .map_err(|err| BackendError::IndexerRpcError(err.to_string()))?;
+        if result.objects.is_empty() {
+            return Err(BackendError::MissProjectGlobalCell(project_type_args.clone()).into());
+        }
+
+        // return global json_data
+        let global_json_data = {
+            let bytes = result.objects[0].output_data.as_bytes();
+            String::from_utf8(bytes.to_vec())
+                .map_err(|_| BackendError::InvalidGlobalDataFormat(project_type_args.clone()))?
+        };
+        Ok(global_json_data)
+    }
+
+    fn search_personal_data(
+        &self,
+        address: String,
+        project_code_hash: &H256,
+        project_type_args: &H256,
+    ) -> KoResult<Vec<(String, OutPoint)>> {
+        let mut rpc_client = IndexerRpcClient::new(&self.indexer_url);
+
+        // build personal type_script search key
+        let project_type_id = helper::recover_type_id_script(project_type_args.as_bytes())
+            .calc_script_hash()
+            .unpack();
+        let personal_args = mol_flag_1(&project_type_id.0);
+        let personal_type_script =
+            helper::build_knsideout_script(project_code_hash, &personal_args);
+        let secp256k1_script: Script = Address::from_str(&address)
+            .map_err(|_| BackendError::InvalidAddressFormat(address))?
+            .payload()
+            .into();
+        let filter = SearchKeyFilter {
+            script: Some(personal_type_script.into()),
+            output_data_len_range: None,
+            output_capacity_range: None,
+            block_range: None,
+        };
+        let search = SearchKey {
+            script: secp256k1_script.into(),
+            script_type: ScriptType::Lock,
+            filter: Some(filter),
+        };
+
+        // collect all personal cells
+        let mut personal_json_data = vec![];
+        let mut after = None;
+        loop {
+            let result = rpc_client
+                .get_cells(search.clone(), Order::Asc, 10.into(), after)
+                .map_err(|err| BackendError::IndexerRpcError(err.to_string()))?;
+            result
+                .objects
+                .into_iter()
+                .map(|cell| {
+                    let json_data = {
+                        let bytes = cell.output_data.as_bytes();
+                        String::from_utf8(bytes.to_vec()).map_err(|_| {
+                            BackendError::InvalidPersonalDataFormat(project_type_args.clone())
+                        })?
+                    };
+                    personal_json_data.push((json_data, cell.out_point.into()));
+                    Ok(())
+                })
+                .collect::<KoResult<_>>()?;
+            if result.last_cursor.is_empty() {
+                break;
+            }
+            after = Some(result.last_cursor);
+        }
+        Ok(personal_json_data)
+    }
+}

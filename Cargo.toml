@@ -14,6 +14,7 @@ ko-core-assembler = { path = "./core/assembler" }
 ko-core-driver = { path = "./core/driver" }
 ko-core-executor = { path = "./core/executor" }
 ko-protocol = { path = "./protocol" }
+ko-rpc = { path = "./rpc" }
 
 [workspace]
 members = [
@@ -23,10 +24,7 @@ members = [
     "core/executor",
     
     "protocol",
-]
 
-[dev-dependencies]
-ckb-hash = "0.101"
-ckb-jsonrpc-types = "0.104"
-hex = "0.4"
-mlua = { version = "0.8", features = ["lua54", "serialize", "vendored"] }
+    "rpc",
+    "rpc/backend",
+]

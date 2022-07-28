@@ -6,9 +6,6 @@ use ko_core_executor::ExecutorImpl;
 use ko_protocol::secp256k1::SecretKey;
 use ko_protocol::tokio;
 
-#[cfg(test)]
-mod deployer;
-
 #[tokio::main]
 async fn main() {
     let matches = Command::new("knside-out")
@@ -30,7 +27,7 @@ async fn main() {
     // make instances of assembler, executor and driver
     let assembler = AssemblerImpl::new(
         &config.ckb_indexer_url,
-        &config.project_type_id,
+        &config.project_type_args,
         &config.project_code_hash,
     );
     let driver = DriverImpl::new(
@@ -57,16 +54,11 @@ async fn main() {
 
     // running context
     let ctx = Context::new(assembler, executor, driver);
-    let cell_deps = config
-        .project_cell_deps
-        .iter()
-        .map(|cell_dep| (cell_dep.transaction_hash.clone(), cell_dep.cell_index))
-        .collect::<Vec<_>>();
     tokio::select! {
         _ = ctrl_c_handler => {
             println!("<Ctrl-C> is on the call, quit knside-out drive loop");
         },
-        Err(error) = ctx.start(&config.project_type_args, &cell_deps) => {
+        Err(error) = ctx.start(&config.project_type_args, &config.project_cell_deps) => {
             println!("[Error] {}", error);
         }
     }
