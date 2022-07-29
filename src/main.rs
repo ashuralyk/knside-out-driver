@@ -5,6 +5,7 @@ use ko_core_driver::DriverImpl;
 use ko_core_executor::ExecutorImpl;
 use ko_protocol::secp256k1::SecretKey;
 use ko_protocol::tokio;
+use ko_rpc_client::RpcClient;
 
 #[tokio::main]
 async fn main() {
@@ -25,13 +26,14 @@ async fn main() {
     let config = ko_config::load_file(config_path).expect("load config");
 
     // make instances of assembler, executor and driver
+    let rpc_client = RpcClient::new(&config.ckb_url, &config.ckb_indexer_url);
     let assembler = AssemblerImpl::new(
-        &config.ckb_indexer_url,
+        &rpc_client,
         &config.project_type_args,
         &config.project_code_hash,
     );
     let driver = DriverImpl::new(
-        &config.ckb_url,
+        &rpc_client,
         &SecretKey::from_slice(&config.project_owner_privkey.0).unwrap(),
     );
     let executor = ExecutorImpl {};

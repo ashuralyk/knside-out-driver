@@ -1,26 +1,26 @@
 use ko_protocol::ckb_sdk::constants::TYPE_ID_CODE_HASH;
-use ko_protocol::ckb_sdk::rpc::ckb_indexer::{IndexerRpcClient, Order, ScriptType, SearchKey};
-use ko_protocol::ckb_types::core::{Capacity, DepType, TransactionView, ScriptHashType};
+use ko_protocol::ckb_sdk::rpc::ckb_indexer::{ScriptType, SearchKey};
+use ko_protocol::ckb_types::core::{Capacity, DepType, ScriptHashType, TransactionView};
 use ko_protocol::ckb_types::packed::{CellDep, CellInput, CellOutput, Script, WitnessArgs};
 use ko_protocol::ckb_types::prelude::{Builder, Entity, Pack, Unpack};
 use ko_protocol::ckb_types::{bytes::Bytes, H256};
-use ko_protocol::traits::Assembler;
+use ko_protocol::traits::{Assembler, CkbClient};
 use ko_protocol::types::assembler::{KoAssembleReceipt, KoCellOutput, KoProject, KoRequest};
-use ko_protocol::KoResult;
+use ko_protocol::{async_trait, KoResult};
 
 mod error;
 mod helper;
 
 use error::AssemblerError;
 
-pub struct AssemblerImpl {
-    rpc_client: IndexerRpcClient,
+pub struct AssemblerImpl<C: CkbClient> {
+    rpc_client: C,
     project_id: H256,
     project_code_hash: H256,
 }
 
-impl AssemblerImpl {
-    pub fn new(indexer_url: &str, project_args: &H256, code_hash: &H256) -> AssemblerImpl {
+impl<C: CkbClient> AssemblerImpl<C> {
+    pub fn new(rpc_client: &C, project_args: &H256, code_hash: &H256) -> AssemblerImpl<C> {
         let project_id = Script::new_builder()
             .code_hash(TYPE_ID_CODE_HASH.pack())
             .hash_type(ScriptHashType::Type.into())
@@ -30,19 +30,20 @@ impl AssemblerImpl {
             .unpack();
         AssemblerImpl {
             project_id,
-            rpc_client: IndexerRpcClient::new(indexer_url),
+            rpc_client: rpc_client.clone(),
             project_code_hash: code_hash.clone(),
         }
     }
 }
 
-impl Assembler for AssemblerImpl {
-    fn prepare_ko_transaction_project_celldep(
-        &mut self,
+#[async_trait]
+impl<C: CkbClient> Assembler for AssemblerImpl<C> {
+    async fn prepare_ko_transaction_project_celldep(
+        &self,
         project_deployment_args: &H256,
     ) -> KoResult<KoProject> {
         let project_cell =
-            helper::search_project_cell(&mut self.rpc_client, project_deployment_args)?;
+            helper::search_project_cell(&self.rpc_client, project_deployment_args).await?;
         let project_celldep = CellDep::new_builder()
             .out_point(project_cell.out_point)
             .dep_type(DepType::Code.into())
@@ -51,17 +52,15 @@ impl Assembler for AssemblerImpl {
         Ok(KoProject::new(project_celldep, project_lua_code))
     }
 
-    fn generate_ko_transaction_with_inputs_and_celldeps(
-        &mut self,
+    async fn generate_ko_transaction_with_inputs_and_celldeps(
+        &self,
         cell_number: u8,
         cell_deps: &[CellDep],
     ) -> KoResult<(TransactionView, KoAssembleReceipt)> {
         // find project global cell
-        let global_cell = helper::search_global_cell(
-            &mut self.rpc_client,
-            &self.project_code_hash,
-            &self.project_id,
-        )?;
+        let global_cell =
+            helper::search_global_cell(&self.rpc_client, &self.project_code_hash, &self.project_id)
+                .await?;
         let mut ko_tx = TransactionView::new_advanced_builder()
             .input(
                 CellInput::new_builder()
@@ -82,7 +81,8 @@ impl Assembler for AssemblerImpl {
         while requests.len() < cell_number as usize {
             let result = self
                 .rpc_client
-                .get_cells(search_key.clone(), Order::Asc, 30.into(), after)
+                .fetch_live_cells(search_key.clone(), 30, after)
+                .await
                 .map_err(|_| AssemblerError::MissProjectRequestCell)?;
             result
                 .objects
@@ -140,7 +140,7 @@ impl Assembler for AssemblerImpl {
         Ok((ko_tx, receipt))
     }
 
-    fn fill_ko_transaction_with_outputs(
+    async fn fill_ko_transaction_with_outputs(
         &self,
         mut tx: TransactionView,
         cell_outputs: &[KoCellOutput],

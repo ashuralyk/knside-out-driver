@@ -884,6 +884,7 @@ name = "ko-core-assembler"
 version = "0.1.0"
 dependencies = [
  "ko-protocol",
+ "ko-rpc-client",
 ]
 
 [[package]]
@@ -916,6 +917,7 @@ dependencies = [
  "ko-core-executor",
  "ko-protocol",
  "ko-rpc",
+ "ko-rpc-client",
 ]
 
 [[package]]
@@ -923,6 +925,7 @@ name = "ko-protocol"
 version = "0.1.0"
 dependencies = [
  "async-trait",
+ "ckb-jsonrpc-types",
  "ckb-sdk",
  "ckb-types",
  "derive_more",
@@ -947,11 +950,21 @@ name = "ko-rpc-backend"
 version = "0.1.0"
 dependencies = [
  "ckb-hash 0.101.8",
- "ckb-jsonrpc-types",
  "hex",
  "ko-core-driver",
  "ko-protocol",
+ "ko-rpc-client",
  "mlua",
+]
+
+[[package]]
+name = "ko-rpc-client"
+version = "0.1.0"
+dependencies = [
+ "futures",
+ "jsonrpc-core",
+ "ko-protocol",
+ "reqwest",
 ]
 
 [[package]]

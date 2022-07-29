@@ -2,21 +2,22 @@ use ckb_types::packed::CellDep;
 use ckb_types::{bytes::Bytes, core::TransactionView, H256};
 
 use crate::types::assembler::{KoAssembleReceipt, KoCellOutput, KoProject};
-use crate::KoResult;
+use crate::{async_trait, KoResult};
 
+#[async_trait]
 pub trait Assembler {
-    fn prepare_ko_transaction_project_celldep(
-        &mut self,
+    async fn prepare_ko_transaction_project_celldep(
+        &self,
         project_deployment_args: &H256,
     ) -> KoResult<KoProject>;
 
-    fn generate_ko_transaction_with_inputs_and_celldeps(
-        &mut self,
+    async fn generate_ko_transaction_with_inputs_and_celldeps(
+        &self,
         cell_number: u8,
         cell_deps: &[CellDep],
     ) -> KoResult<(TransactionView, KoAssembleReceipt)>;
 
-    fn fill_ko_transaction_with_outputs(
+    async fn fill_ko_transaction_with_outputs(
         &self,
         tx: TransactionView,
         cell_outputs: &[KoCellOutput],

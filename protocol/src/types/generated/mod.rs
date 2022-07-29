@@ -96,7 +96,10 @@ pub fn mol_flag_2_raw(bytes: &[u8]) -> Option<generated::Flag2> {
 }
 
 pub fn is_mol_flag_0(bytes: &[u8], hash: Option<&[u8; 32]>) -> bool {
-    if !bytes.is_empty() && bytes[0] == 0u8 && generated::Flag0Reader::verify(&bytes[1..], false).is_ok() {
+    if !bytes.is_empty()
+        && bytes[0] == 0u8
+        && generated::Flag0Reader::verify(&bytes[1..], false).is_ok()
+    {
         if let Some(hash) = hash {
             let flag_0 = generated::Flag0::new_unchecked(Bytes::from(bytes[1..].to_vec()));
             if flag_0.project_id().as_slice() == hash.as_slice() {
@@ -110,7 +113,10 @@ pub fn is_mol_flag_0(bytes: &[u8], hash: Option<&[u8; 32]>) -> bool {
 }
 
 pub fn is_mol_flag_1(bytes: &[u8], hash: Option<&[u8; 32]>) -> bool {
-    if !bytes.is_empty() && bytes[0] == 1u8 && generated::Flag1Reader::verify(&bytes[1..], false).is_ok() {
+    if !bytes.is_empty()
+        && bytes[0] == 1u8
+        && generated::Flag1Reader::verify(&bytes[1..], false).is_ok()
+    {
         if let Some(hash) = hash {
             let flag_1 = generated::Flag1::new_unchecked(Bytes::from(bytes[1..].to_vec()));
             if flag_1.project_id().as_slice() == hash.as_slice() {

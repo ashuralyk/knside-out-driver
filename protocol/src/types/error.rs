@@ -9,6 +9,7 @@ pub enum ErrorType {
     Config,
     Deployer,
     Requester,
+    CkbClient,
 }
 
 #[derive(Debug, Constructor, Display)]

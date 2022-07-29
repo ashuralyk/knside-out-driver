@@ -1,15 +1,14 @@
 use std::str::FromStr;
 
 use ko_protocol::ckb_sdk::constants::TYPE_ID_CODE_HASH;
-use ko_protocol::ckb_sdk::rpc::ckb_indexer::{Order, SearchKey};
+use ko_protocol::ckb_sdk::rpc::ckb_indexer::SearchKey;
 use ko_protocol::ckb_sdk::HumanCapacity;
-use ko_protocol::ckb_sdk::IndexerRpcClient;
 use ko_protocol::ckb_types::core::{ScriptHashType, TransactionView};
 use ko_protocol::ckb_types::packed::{CellInput, CellOutput, Script, ScriptOpt, WitnessArgs};
 use ko_protocol::ckb_types::prelude::{Builder, Entity, Pack, Unpack};
 use ko_protocol::ckb_types::{bytes::Bytes, H256};
 use ko_protocol::serde_json;
-use ko_protocol::KoResult;
+use ko_protocol::{traits::CkbClient, KoResult};
 
 use crate::BackendError;
 
@@ -47,8 +46,8 @@ pub fn recover_type_id_script(args: &[u8]) -> Script {
         .build()
 }
 
-pub fn fetch_live_cells(
-    rpc: &mut IndexerRpcClient,
+pub async fn fetch_live_cells(
+    rpc: &impl CkbClient,
     search_key: SearchKey,
     mut inputs_capacity: u64,
     outputs_capacity: u64,
@@ -57,7 +56,8 @@ pub fn fetch_live_cells(
     let mut after = None;
     while inputs_capacity < outputs_capacity {
         let result = rpc
-            .get_cells(search_key.clone(), Order::Asc, 10.into(), after)
+            .fetch_live_cells(search_key.clone(), 10, after)
+            .await
             .map_err(|err| BackendError::IndexerRpcError(err.to_string()))?;
         result
             .objects

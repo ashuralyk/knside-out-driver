@@ -1,8 +1,8 @@
 use std::collections::HashMap;
 use std::str::FromStr;
 
-use ko_protocol::ckb_sdk::rpc::ckb_indexer::{Order, ScriptType, SearchKey, SearchKeyFilter};
-use ko_protocol::ckb_sdk::{Address, CkbRpcClient, IndexerRpcClient};
+use ko_protocol::ckb_sdk::rpc::ckb_indexer::{ScriptType, SearchKey, SearchKeyFilter};
+use ko_protocol::ckb_sdk::Address;
 use ko_protocol::ckb_types::core::{Capacity, TransactionBuilder, TransactionView};
 use ko_protocol::ckb_types::packed::{
     CellDep, CellInput, CellOutput, OutPoint, Script, Transaction,
@@ -10,7 +10,7 @@ use ko_protocol::ckb_types::packed::{
 use ko_protocol::ckb_types::prelude::{Builder, Entity, Pack, Unpack};
 use ko_protocol::ckb_types::{bytes::Bytes, H256};
 use ko_protocol::tokio::sync::Mutex;
-use ko_protocol::traits::Backend;
+use ko_protocol::traits::{Backend, CkbClient};
 use ko_protocol::types::config::KoCellDep;
 use ko_protocol::types::generated::{mol_deployment, mol_flag_0};
 use ko_protocol::{async_trait, mol_flag_1, mol_flag_2, KoResult};
@@ -22,24 +22,22 @@ mod error;
 mod helper;
 use error::BackendError;
 
-pub struct BackendImpl {
-    indexer_url: String,
-    ckb_url: String,
+pub struct BackendImpl<C: CkbClient> {
+    rpc_client: C,
     cached_transactions: Mutex<HashMap<H256, TransactionView>>,
 }
 
-impl BackendImpl {
-    pub fn new(ckb_url: &str, indexer_url: &str) -> Self {
+impl<C: CkbClient> BackendImpl<C> {
+    pub fn new(rpc_client: &C) -> Self {
         BackendImpl {
-            ckb_url: ckb_url.into(),
-            indexer_url: indexer_url.into(),
+            rpc_client: rpc_client.clone(),
             cached_transactions: Mutex::new(HashMap::new()),
         }
     }
 }
 
 #[async_trait]
-impl Backend for BackendImpl {
+impl<C: CkbClient> Backend for BackendImpl<C> {
     async fn create_project_deploy_digest(
         &mut self,
         contract: Bytes,
@@ -47,8 +45,6 @@ impl Backend for BackendImpl {
         project_code_hash: &H256,
         project_cell_deps: &[KoCellDep],
     ) -> KoResult<(H256, H256)> {
-        let mut rpc_client = IndexerRpcClient::new(&self.indexer_url);
-
         // make global of output-data
         let global_data_json = helper::get_global_json_data(&contract)?;
         println!("global_data_json = {}", global_data_json);
@@ -56,6 +52,7 @@ impl Backend for BackendImpl {
         // build mock knside-out transaction outputs and data
         let ckb_address =
             Address::from_str(&address).map_err(|_| BackendError::InvalidAddressFormat(address))?;
+        println!("address = {}", ckb_address);
         let secp256k1_script: Script = ckb_address.payload().into();
         let global_type_script =
             helper::build_knsideout_script(project_code_hash, mol_flag_0(&[0u8; 32]).as_slice());
@@ -93,7 +90,7 @@ impl Backend for BackendImpl {
             filter: None,
         };
         let (inputs, inputs_capacity) =
-            helper::fetch_live_cells(&mut rpc_client, search, 0, outputs_capacity)?;
+            helper::fetch_live_cells(&self.rpc_client, search, 0, outputs_capacity).await?;
         println!(
             "inputs_capacity = {}, outputs_capacity = {}",
             inputs_capacity, outputs_capacity
@@ -162,8 +159,6 @@ impl Backend for BackendImpl {
         project_type_args: &H256,
         project_cell_deps: &[KoCellDep],
     ) -> KoResult<H256> {
-        let mut rpc_client = IndexerRpcClient::new(&self.indexer_url);
-
         // search existed project deployment cell on CKB
         let project_type_script = helper::recover_type_id_script(project_type_args.as_bytes());
         let search_key = SearchKey {
@@ -171,8 +166,10 @@ impl Backend for BackendImpl {
             script_type: ScriptType::Type,
             filter: None,
         };
-        let result = rpc_client
-            .get_cells(search_key, Order::Asc, 1.into(), None)
+        let result = self
+            .rpc_client
+            .fetch_live_cells(search_key, 1, None)
+            .await
             .map_err(|err| BackendError::IndexerRpcError(err.to_string()))?;
         if result.objects.is_empty() {
             return Err(BackendError::MissProjectDeploymentCell(project_type_args.clone()).into());
@@ -209,7 +206,8 @@ impl Backend for BackendImpl {
             filter: None,
         };
         let (mut inputs, inputs_capacity) =
-            helper::fetch_live_cells(&mut rpc_client, search, inputs_capacity, outputs_capacity)?;
+            helper::fetch_live_cells(&self.rpc_client, search, inputs_capacity, outputs_capacity)
+                .await?;
         println!(
             "inputs_&capacity = {}, outputs_capacity = {}",
             inputs_capacity, outputs_capacity
@@ -261,9 +259,6 @@ impl Backend for BackendImpl {
         project_type_args: &H256,
         project_cell_deps: &[KoCellDep],
     ) -> KoResult<H256> {
-        let mut rpc_client = IndexerRpcClient::new(&self.indexer_url);
-        let mut ckb_client = CkbRpcClient::new(&self.ckb_url);
-
         // build necessary scripts
         let project_type_id = helper::recover_type_id_script(project_type_args.as_bytes())
             .calc_script_hash()
@@ -280,8 +275,10 @@ impl Backend for BackendImpl {
         let mut inputs_capacity = 0u64;
         let mut inputs = vec![];
         if let Some(outpoint) = previous_cell {
-            let tx: Transaction = ckb_client
-                .get_transaction(outpoint.tx_hash().unpack())
+            let tx: Transaction = self
+                .rpc_client
+                .get_transaction(&outpoint.tx_hash().unpack())
+                .await
                 .map_err(|err| BackendError::CkbRpcError(err.to_string()))?
                 .unwrap()
                 .transaction
@@ -334,7 +331,8 @@ impl Backend for BackendImpl {
             filter: None,
         };
         let (mut extra_inputs, inputs_capacity) =
-            helper::fetch_live_cells(&mut rpc_client, search, inputs_capacity, outputs_capacity)?;
+            helper::fetch_live_cells(&self.rpc_client, search, inputs_capacity, outputs_capacity)
+                .await?;
         inputs.append(&mut extra_inputs);
 
         // rebuild change output
@@ -372,13 +370,11 @@ impl Backend for BackendImpl {
         cache.remove(digest)
     }
 
-    fn search_global_data(
+    async fn search_global_data(
         &self,
         project_code_hash: &H256,
         project_type_args: &H256,
     ) -> KoResult<String> {
-        let mut rpc_client = IndexerRpcClient::new(&self.indexer_url);
-
         // build global type_script search key
         let project_type_id = helper::recover_type_id_script(project_type_args.as_bytes())
             .calc_script_hash()
@@ -392,8 +388,10 @@ impl Backend for BackendImpl {
         };
 
         // search global cell
-        let result = rpc_client
-            .get_cells(search, Order::Asc, 1.into(), None)
+        let result = self
+            .rpc_client
+            .fetch_live_cells(search, 1, None)
+            .await
             .map_err(|err| BackendError::IndexerRpcError(err.to_string()))?;
         if result.objects.is_empty() {
             return Err(BackendError::MissProjectGlobalCell(project_type_args.clone()).into());
@@ -408,14 +406,12 @@ impl Backend for BackendImpl {
         Ok(global_json_data)
     }
 
-    fn search_personal_data(
+    async fn search_personal_data(
         &self,
         address: String,
         project_code_hash: &H256,
         project_type_args: &H256,
     ) -> KoResult<Vec<(String, OutPoint)>> {
-        let mut rpc_client = IndexerRpcClient::new(&self.indexer_url);
-
         // build personal type_script search key
         let project_type_id = helper::recover_type_id_script(project_type_args.as_bytes())
             .calc_script_hash()
@@ -443,8 +439,10 @@ impl Backend for BackendImpl {
         let mut personal_json_data = vec![];
         let mut after = None;
         loop {
-            let result = rpc_client
-                .get_cells(search.clone(), Order::Asc, 10.into(), after)
+            let result = self
+                .rpc_client
+                .fetch_live_cells(search.clone(), 10, after)
+                .await
                 .map_err(|err| BackendError::IndexerRpcError(err.to_string()))?;
             result
                 .objects

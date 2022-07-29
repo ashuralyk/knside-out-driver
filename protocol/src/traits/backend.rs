@@ -1,6 +1,6 @@
-use ckb_types::{H256, bytes::Bytes, core::TransactionView, packed::OutPoint};
 use crate::types::config::KoCellDep;
-use crate::{KoResult, async_trait};
+use crate::{async_trait, KoResult};
+use ckb_types::{bytes::Bytes, core::TransactionView, packed::OutPoint, H256};
 
 #[async_trait]
 pub trait Backend {
@@ -9,7 +9,7 @@ pub trait Backend {
         contract: Bytes,
         address: String,
         project_code_hash: &H256,
-        project_cell_deps: &[KoCellDep]
+        project_cell_deps: &[KoCellDep],
     ) -> KoResult<(H256, H256)>;
 
     async fn create_project_update_digest(
@@ -17,7 +17,7 @@ pub trait Backend {
         contract: Bytes,
         address: String,
         project_type_args: &H256,
-        project_cell_deps: &[KoCellDep]
+        project_cell_deps: &[KoCellDep],
     ) -> KoResult<H256>;
 
     async fn create_project_request_digest(
@@ -27,21 +27,21 @@ pub trait Backend {
         function_call: String,
         project_code_hash: &H256,
         project_type_args: &H256,
-        project_cell_deps: &[KoCellDep]
+        project_cell_deps: &[KoCellDep],
     ) -> KoResult<H256>;
 
     async fn pop_transaction(&mut self, digest: &H256) -> Option<TransactionView>;
 
-    fn search_global_data(
+    async fn search_global_data(
         &self,
         project_code_hash: &H256,
-        project_type_args: &H256
+        project_type_args: &H256,
     ) -> KoResult<String>;
 
-    fn search_personal_data(
+    async fn search_personal_data(
         &self,
         address: String,
         project_code_hash: &H256,
-        project_type_args: &H256
+        project_type_args: &H256,
     ) -> KoResult<Vec<(String, OutPoint)>>;
 }

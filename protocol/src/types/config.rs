@@ -1,8 +1,8 @@
-use ckb_types::H256;
 use ckb_types::packed::{CellDep, OutPoint};
 use ckb_types::prelude::{Builder, Entity, Pack};
-use serde::Deserialize;
+use ckb_types::H256;
 use derive_more::Constructor;
+use serde::Deserialize;
 
 #[derive(Deserialize, Clone, Constructor)]
 pub struct KoCellDep {
@@ -14,7 +14,10 @@ pub struct KoCellDep {
 impl From<&KoCellDep> for CellDep {
     fn from(cell_dep: &KoCellDep) -> Self {
         CellDep::new_builder()
-            .out_point(OutPoint::new(cell_dep.transaction_hash.pack(), cell_dep.cell_index))
+            .out_point(OutPoint::new(
+                cell_dep.transaction_hash.pack(),
+                cell_dep.cell_index,
+            ))
             .dep_type(cell_dep.dep_type.into())
             .build()
     }

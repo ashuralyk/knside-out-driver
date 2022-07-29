@@ -2,6 +2,7 @@ pub mod traits;
 pub mod types;
 
 pub use async_trait::async_trait;
+pub use ckb_jsonrpc_types;
 pub use ckb_sdk;
 pub use ckb_types;
 pub use derive_more;

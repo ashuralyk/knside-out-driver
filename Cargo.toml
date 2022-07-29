@@ -15,6 +15,7 @@ ko-core-driver = { path = "./core/driver" }
 ko-core-executor = { path = "./core/executor" }
 ko-protocol = { path = "./protocol" }
 ko-rpc = { path = "./rpc" }
+ko-rpc-client = { path = "./rpc/client" }
 
 [workspace]
 members = [
@@ -27,4 +28,5 @@ members = [
 
     "rpc",
     "rpc/backend",
+    "rpc/client",
 ]
