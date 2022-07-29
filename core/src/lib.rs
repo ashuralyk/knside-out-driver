@@ -2,12 +2,15 @@ use std::time::Duration;
 
 use ko_protocol::ckb_types::packed::CellDep;
 use ko_protocol::ckb_types::prelude::Unpack;
-use ko_protocol::ckb_types::H256;
+use ko_protocol::ckb_types::{H256, bytes::Bytes};
 use ko_protocol::tokio;
 use ko_protocol::traits::{Assembler, Driver, Executor};
-use ko_protocol::types::assembler::{KoCellOutput, KoProject};
+use ko_protocol::types::assembler::KoCellOutput;
 use ko_protocol::types::config::KoCellDep;
 use ko_protocol::KoResult;
+
+#[cfg(test)]
+mod tests;
 
 pub struct Context<A, E, D>
 where
@@ -18,9 +21,6 @@ where
     ko_assembler: A,
     ko_executor: E,
     ko_driver: D,
-
-    project_dep: KoProject,
-    transaction_dep: Vec<CellDep>,
 
     drive_interval: Duration,
     max_reqeusts_count: u8,
@@ -37,8 +37,6 @@ where
             ko_assembler: assembler,
             ko_executor: executor,
             ko_driver: driver,
-            project_dep: KoProject::default(),
-            transaction_dep: vec![],
             drive_interval: Duration::from_secs(3),
             max_reqeusts_count: 20,
         }
@@ -55,34 +53,40 @@ where
     }
 
     pub async fn start(
-        mut self,
-        project_type_args: &H256,
+        self,
         project_cell_deps: &[KoCellDep],
     ) -> KoResult<()> {
-        self.project_dep = self
+        let project_dep = self
             .ko_assembler
-            .prepare_ko_transaction_project_celldep(project_type_args)
+            .prepare_ko_transaction_project_celldep()
             .await?;
-        self.transaction_dep = self
+        let transaction_deps = self
             .ko_driver
             .prepare_ko_transaction_normal_celldeps(project_cell_deps)
             .await?;
         let mut interval = tokio::time::interval(self.drive_interval);
 
         loop {
-            let (hash, _) = tokio::join!(self.drive(), interval.tick());
+            let (hash, _) = tokio::join!(
+                self.drive(&project_dep.lua_code, &transaction_deps),
+                interval.tick()
+            );
             if let Some(hash) = hash? {
                 println!("[Core] knside-out tansaction hash = {}", hash);
             }
         }
     }
 
-    async fn drive(&mut self) -> KoResult<Option<H256>> {
+    pub async fn drive(
+        &self,
+        project_lua_code: &Bytes,
+        project_cell_deps: &[CellDep],
+    ) -> KoResult<Option<H256>> {
         let (tx, receipt) = self
             .ko_assembler
             .generate_ko_transaction_with_inputs_and_celldeps(
                 self.max_reqeusts_count,
-                &self.transaction_dep,
+                &project_cell_deps,
             )
             .await?;
         if receipt.requests.is_empty() {
@@ -92,7 +96,7 @@ where
             &receipt.global_json_data,
             &receipt.global_lockscript.calc_script_hash().unpack(),
             &receipt.requests,
-            &self.project_dep.lua_code,
+            &project_lua_code,
         )?;
         let mut cell_outputs = vec![KoCellOutput::new(
             receipt.global_json_data,
@@ -100,8 +104,6 @@ where
             0,
         )];
         // assemble transaction outputs import
-        assert!(receipt.requests.len() == result.outputs_json_data.len());
-        assert!(receipt.requests.len() == result.required_payments.len());
         receipt
             .requests
             .into_iter()

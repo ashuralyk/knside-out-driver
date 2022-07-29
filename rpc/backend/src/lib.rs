@@ -56,13 +56,13 @@ impl<C: CkbClient> Backend for BackendImpl<C> {
         let secp256k1_script: Script = ckb_address.payload().into();
         let global_type_script =
             helper::build_knsideout_script(project_code_hash, mol_flag_0(&[0u8; 32]).as_slice());
-        let deployment = mol_deployment(&contract);
+        let deployment = mol_deployment(&contract).as_bytes();
         let mut outputs = vec![
             // project cell
             CellOutput::new_builder()
                 .lock(secp256k1_script.clone())
                 .type_(helper::build_type_id_script(None, 0))
-                .build_exact_capacity(Capacity::bytes(deployment.as_slice().len()).unwrap())
+                .build_exact_capacity(Capacity::bytes(deployment.len()).unwrap())
                 .unwrap(),
             // global cell
             CellOutput::new_builder()
@@ -77,7 +77,7 @@ impl<C: CkbClient> Backend for BackendImpl<C> {
                 .unwrap(),
         ];
         let outputs_data = vec![
-            deployment.as_bytes(),
+            deployment,
             Bytes::from(global_data_json.as_bytes().to_vec()),
             Bytes::default(),
         ];
@@ -182,12 +182,13 @@ impl<C: CkbClient> Backend for BackendImpl<C> {
             .payload()
             .into();
         let previous_type_script = deployment_cell.output.type_.as_ref().unwrap();
+        let deployment = mol_deployment(&contract).as_bytes();
         let mut outputs = vec![
             // new project deployment cell
             CellOutput::new_builder()
                 .lock(secp256k1_script.clone())
                 .type_(Some(previous_type_script.clone().into()).pack())
-                .build_exact_capacity(Capacity::bytes(contract.len()).unwrap())
+                .build_exact_capacity(Capacity::bytes(deployment.len()).unwrap())
                 .unwrap(),
             // change cell
             CellOutput::new_builder()
@@ -195,7 +196,7 @@ impl<C: CkbClient> Backend for BackendImpl<C> {
                 .build_exact_capacity(Capacity::zero())
                 .unwrap(),
         ];
-        let outputs_data = vec![contract, Bytes::new()];
+        let outputs_data = vec![deployment, Bytes::new()];
         let outputs_capacity = helper::calc_outputs_capacity(&outputs, "1.0");
 
         // fill kinside-out transaction inputs

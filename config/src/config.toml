@@ -1,11 +1,11 @@
 # type_args is script_args which generates project type_id
-project_type_args = "8ee3bccb2a5b2cc0a04bdcef804ac39bb395dd64207c840c5764504d526c6d34"
+project_type_args = "0x8ee3bccb2a5b2cc0a04bdcef804ac39bb395dd64207c840c5764504d526c6d34"
 
 # the deployer of this project
-project_owner_privkey = "9a8fc5c463841c152800ec45ef4ceb03586177a7e6a9f34a6e40256310325e43"
+project_owner_privkey = "0x9a8fc5c463841c152800ec45ef4ceb03586177a7e6a9f34a6e40256310325e43"
 
 # knside-out contract code_hash
-project_code_hash = "e72d02d5a2dbf1b893e5b9ae17602395533b6b918cee67d234669c24b41cc4f7"
+project_code_hash = "0xe72d02d5a2dbf1b893e5b9ae17602395533b6b918cee67d234669c24b41cc4f7"
 
 # url for connecting CKB node
 ckb_url = "http://127.0.0.1:8114"
@@ -18,7 +18,7 @@ project_cell_deps = [
     # omni
     # { transaction_hash = "", cell_index = 0, dep_type = 0 },
     # secp256k1
-    { transaction_hash = "5c7b70f4fd242ff0fb703de908e2e7eef21621b640fe9a9c752643021a87bc1f", cell_index = 0, dep_type = 1 },
+    { transaction_hash = "0x5c7b70f4fd242ff0fb703de908e2e7eef21621b640fe9a9c752643021a87bc1f", cell_index = 0, dep_type = 1 },
     # knside-out
-    { transaction_hash = "6bbbd9a777fe6e115de76c01dac97afd24a1c54c0ebd06f0eb1a6bb42e512ead", cell_index = 0, dep_type = 0 },
+    { transaction_hash = "0x6bbbd9a777fe6e115de76c01dac97afd24a1c54c0ebd06f0eb1a6bb42e512ead", cell_index = 0, dep_type = 0 },
 ]

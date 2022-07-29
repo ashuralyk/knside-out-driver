@@ -16,7 +16,7 @@ pub async fn search_project_cell(
     let project_typescript = Script::new_builder()
         .code_hash(TYPE_ID_CODE_HASH.pack())
         .hash_type(ScriptHashType::Type.into())
-        .args(Bytes::from(project_id_args.0.to_vec()).pack())
+        .args(project_id_args.0.as_slice().pack())
         .build();
     let search_key = SearchKey {
         script: project_typescript.into(),
@@ -26,7 +26,7 @@ pub async fn search_project_cell(
     let result = rpc
         .fetch_live_cells(search_key, 1, None)
         .await
-        .map_err(|_| AssemblerError::MissProjectDeploymentCell(project_id_args.clone()))?;
+        .map_err(|err| AssemblerError::IndexerRpcError(err.to_string()))?;
     if let Some(cell) = result.objects.first() {
         Ok((cell.clone()).into())
     } else {
@@ -41,12 +41,12 @@ pub async fn search_global_cell(
 ) -> KoResult<LiveCell> {
     let global_typescript = Script::new_builder()
         .code_hash(code_hash.pack())
-        .hash_type(ScriptHashType::Data1.into())
-        .args(Bytes::from(mol_flag_0(&project_id.0)).pack())
+        .hash_type(ScriptHashType::Data.into())
+        .args(mol_flag_0(&project_id.0).as_slice().pack())
         .build();
     let search_key = SearchKey {
         script: global_typescript.into(),
-        script_type: ScriptType::Lock,
+        script_type: ScriptType::Type,
         filter: None,
     };
     let result = rpc
@@ -64,31 +64,24 @@ pub fn make_global_script(code_hash: &H256, project_id: &H256) -> Script {
     Script::new_builder()
         .code_hash(code_hash.pack())
         .hash_type(ScriptHashType::Data1.into())
-        .args(Bytes::from(mol_flag_0(&project_id.0)).pack())
+        .args(mol_flag_0(&project_id.0).as_slice().pack())
         .build()
 }
 
 pub fn make_personal_script(code_hash: &H256, project_id: &H256) -> Script {
     Script::new_builder()
         .code_hash(code_hash.pack())
-        .hash_type(ScriptHashType::Data1.into())
-        .args(Bytes::from(mol_flag_1(&project_id.0)).pack())
+        .hash_type(ScriptHashType::Data.into())
+        .args(mol_flag_1(&project_id.0).as_slice().pack())
         .build()
 }
 
-pub fn check_valid_request(cell: &CellOutput, code_hash: &H256, project_id: &H256) -> bool {
-    let lock = cell.lock();
+pub fn check_valid_request(cell: &CellOutput, code_hash: &H256) -> bool {
+    let lock = &cell.lock();
     if lock.code_hash().as_slice() != code_hash.as_bytes()
-        || lock.hash_type() != ScriptHashType::Data1.into()
+        || lock.hash_type() != ScriptHashType::Data.into()
         || !is_mol_flag_2(&lock.args().raw_data().to_vec())
     {
-        return false;
-    }
-    if let Some(type_) = cell.type_().to_opt() {
-        if type_.as_slice() != make_personal_script(code_hash, project_id).as_slice() {
-            return false;
-        }
-    } else {
         return false;
     }
     true

@@ -36,7 +36,7 @@ async fn main() {
         &rpc_client,
         &SecretKey::from_slice(&config.project_owner_privkey.0).unwrap(),
     );
-    let executor = ExecutorImpl {};
+    let executor = ExecutorImpl::new();
 
     // handle exception operation
     let ctrl_c_handler = tokio::spawn(async {
@@ -60,7 +60,7 @@ async fn main() {
         _ = ctrl_c_handler => {
             println!("<Ctrl-C> is on the call, quit knside-out drive loop");
         },
-        Err(error) = ctx.start(&config.project_type_args, &config.project_cell_deps) => {
+        Err(error) = ctx.start(&config.project_cell_deps) => {
             println!("[Error] {}", error);
         }
     }

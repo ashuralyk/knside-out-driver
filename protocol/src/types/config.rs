@@ -4,7 +4,7 @@ use ckb_types::H256;
 use derive_more::Constructor;
 use serde::Deserialize;
 
-#[derive(Deserialize, Clone, Constructor)]
+#[derive(Deserialize, Clone, Constructor, Debug)]
 pub struct KoCellDep {
     pub transaction_hash: H256,
     pub cell_index: u32,
@@ -23,7 +23,7 @@ impl From<&KoCellDep> for CellDep {
     }
 }
 
-#[derive(Deserialize)]
+#[derive(Deserialize, Debug)]
 pub struct KoConfig {
     pub project_type_args: H256,
     pub project_owner_privkey: H256,

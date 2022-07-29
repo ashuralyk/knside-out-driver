@@ -4,6 +4,9 @@ use ko_protocol::types::error::{ErrorType, KoError};
 
 #[derive(Display, Debug)]
 pub enum AssemblerError {
+    #[display(fmt = "{}", _0)]
+    IndexerRpcError(String),
+
     #[display(fmt = "Project cell not found, project_id_args = {}", _0)]
     MissProjectDeploymentCell(H256),
 

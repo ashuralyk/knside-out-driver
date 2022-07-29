@@ -876,7 +876,11 @@ dependencies = [
 name = "ko-core"
 version = "0.1.0"
 dependencies = [
+ "ko-core-assembler",
+ "ko-core-driver",
+ "ko-core-executor",
  "ko-protocol",
+ "ko-rpc-client",
 ]
 
 [[package]]

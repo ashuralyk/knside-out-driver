@@ -16,6 +16,7 @@ use error::AssemblerError;
 pub struct AssemblerImpl<C: CkbClient> {
     rpc_client: C,
     project_id: H256,
+    project_id_args: H256,
     project_code_hash: H256,
 }
 
@@ -30,6 +31,7 @@ impl<C: CkbClient> AssemblerImpl<C> {
             .unpack();
         AssemblerImpl {
             project_id,
+            project_id_args: project_args.clone(),
             rpc_client: rpc_client.clone(),
             project_code_hash: code_hash.clone(),
         }
@@ -38,12 +40,9 @@ impl<C: CkbClient> AssemblerImpl<C> {
 
 #[async_trait]
 impl<C: CkbClient> Assembler for AssemblerImpl<C> {
-    async fn prepare_ko_transaction_project_celldep(
-        &self,
-        project_deployment_args: &H256,
-    ) -> KoResult<KoProject> {
+    async fn prepare_ko_transaction_project_celldep(&self) -> KoResult<KoProject> {
         let project_cell =
-            helper::search_project_cell(&self.rpc_client, project_deployment_args).await?;
+            helper::search_project_cell(&self.rpc_client, &self.project_id_args).await?;
         let project_celldep = CellDep::new_builder()
             .out_point(project_cell.out_point)
             .dep_type(DepType::Code.into())
@@ -89,41 +88,39 @@ impl<C: CkbClient> Assembler for AssemblerImpl<C> {
                 .into_iter()
                 .try_for_each::<_, KoResult<_>>(|cell| {
                     let output = cell.output.into();
-                    if helper::check_valid_request(
-                        &output,
-                        &self.project_code_hash,
-                        &self.project_id,
-                    ) {
-                        let flag_2 =
-                            ko_protocol::mol_flag_2_raw(&output.lock().args().raw_data().to_vec())
-                                .unwrap();
-                        let lock_script =
-                            Script::from_slice(&flag_2.caller_lockscript().raw_data())
-                                .map_err(|_| AssemblerError::UnsupportedCallerScriptFormat)?;
-                        let payment = {
-                            let capacity: u64 = output.capacity().unpack();
-                            total_inputs_capacity += capacity;
-                            let exact_capacity =
-                                Capacity::bytes(output.as_bytes().len() + cell.output_data.len())
-                                    .unwrap()
-                                    .as_u64();
-                            capacity - exact_capacity
-                        };
-                        requests.push(KoRequest::new(
-                            cell.output_data.into_bytes(),
-                            flag_2.function_call().raw_data(),
-                            lock_script,
-                            payment,
-                        ));
-                        ko_tx = ko_tx
-                            .as_advanced_builder()
-                            .input(
-                                CellInput::new_builder()
-                                    .previous_output(cell.out_point.into())
-                                    .build(),
-                            )
-                            .build();
+                    if !helper::check_valid_request(&output, &self.project_code_hash) {
+                        println!("[Warn] find invalid reqeust format");
+                        return Ok(());
                     }
+                    let flag_2 =
+                        ko_protocol::mol_flag_2_raw(&output.lock().args().raw_data().to_vec())
+                            .expect("flag_2 molecule");
+                    let lock_script =
+                        Script::from_slice(&flag_2.caller_lockscript().raw_data())
+                            .map_err(|_| AssemblerError::UnsupportedCallerScriptFormat)?;
+                    let payment = {
+                        let capacity: u64 = output.capacity().unpack();
+                        total_inputs_capacity += capacity;
+                        let exact_capacity =
+                            Capacity::bytes(output.as_bytes().len() + cell.output_data.len())
+                                .unwrap()
+                                .as_u64();
+                        capacity - exact_capacity
+                    };
+                    requests.push(KoRequest::new(
+                        cell.output_data.into_bytes(),
+                        flag_2.function_call().raw_data(),
+                        lock_script,
+                        payment,
+                    ));
+                    ko_tx = ko_tx
+                        .as_advanced_builder()
+                        .input(
+                            CellInput::new_builder()
+                                .previous_output(cell.out_point.into())
+                                .build(),
+                        )
+                        .build();
                     Ok(())
                 })?;
             if result.last_cursor.is_empty() {

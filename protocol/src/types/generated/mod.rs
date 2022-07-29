@@ -88,7 +88,8 @@ pub fn mol_deployment_raw(bytes: &[u8]) -> Option<generated::Deployment> {
 }
 
 pub fn mol_flag_2_raw(bytes: &[u8]) -> Option<generated::Flag2> {
-    if generated::Flag2Reader::verify(bytes, false).is_ok() {
+    let payload = &bytes[1..];
+    if generated::Flag2Reader::verify(payload, false).is_ok() {
         Some(generated::Flag2::new_unchecked(Bytes::from(bytes.to_vec())))
     } else {
         None

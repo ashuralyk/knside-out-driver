@@ -7,3 +7,9 @@ edition = "2021"
 
 [dependencies]
 ko-protocol = { path = "../protocol" }
+
+[dev-dependencies]
+ko-core-assembler = { path = "./assembler" }
+ko-core-driver = { path = "./driver" }
+ko-core-executor = { path = "./executor" }
+ko-rpc-client = { path = "../rpc/client" }

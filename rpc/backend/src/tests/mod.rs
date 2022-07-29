@@ -108,7 +108,7 @@ async fn update_project_deployment_cell() {
 }
 
 #[tokio::test]
-async fn request_project_reqeust_cell() {
+async fn request_project_request_cell() {
     let cell_deps = vec![
         KoCellDep::new(SECP256K1_TX_HASH.clone(), 0, DepType::DepGroup.into()),
         KoCellDep::new(KNSIDEOUT_TX_HASH.clone(), 0, DepType::Code.into()),
@@ -132,4 +132,28 @@ async fn request_project_reqeust_cell() {
     // sign and push transaction
     let tx = backend.pop_transaction(&digest).await.expect("pop");
     sign_and_push(&rpc_client, tx).await;
+}
+
+#[tokio::test]
+async fn fetch_global_json_data() {
+    let rpc_client = RpcClient::new(CKB_URL, CKB_INDEXER_URL);
+    let backend = BackendImpl::new(&rpc_client);
+    let global_data = backend
+        .search_global_data(&PROJECT_CODE_HASH, &PROJECT_TYPE_ARGS)
+        .await
+        .expect("search global");
+    println!("global_data = {}", global_data);
+}
+
+#[tokio::test]
+async fn fetch_personal_json_data() {
+    let rpc_client = RpcClient::new(CKB_URL, CKB_INDEXER_URL);
+    let backend = BackendImpl::new(&rpc_client);
+    let personal_data = backend
+        .search_personal_data(OWNER_ADDRESS.into(), &PROJECT_CODE_HASH, &PROJECT_TYPE_ARGS)
+        .await
+        .expect("search personal");
+    personal_data.into_iter().for_each(|(data, outpoint)| {
+        println!("personal_data = {}, outpoint = {}", data, outpoint);
+    });
 }

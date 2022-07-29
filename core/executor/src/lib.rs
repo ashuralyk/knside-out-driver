@@ -8,11 +8,13 @@ use ko_protocol::serde_json::to_string;
 use ko_protocol::traits::Executor;
 use ko_protocol::types::{assembler::KoRequest, executor::KoExecuteReceipt};
 use ko_protocol::KoResult;
+use ko_protocol::derive_more::Constructor;
 use mlua::{Lua, Table};
 
 mod error;
 use error::ExecutorError;
 
+#[derive(Constructor)]
 pub struct ExecutorImpl {}
 
 impl Executor for ExecutorImpl {

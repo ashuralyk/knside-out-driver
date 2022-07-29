@@ -11,3 +11,9 @@ pub fn load_file(path: &str) -> KoResult<KoConfig> {
         .map_err(|err| ConfigError::ErrorLoadingConfig(path.into(), err.to_string()))?;
     Ok(config)
 }
+
+#[test]
+fn test_load_file() {
+    let config = load_file("./src/config.toml").expect("load config");
+    println!("config = {:?}", config);
+}

@@ -1,6 +1,5 @@
 use ckb_types::bytes::Bytes;
 use ckb_types::packed::{CellDep, Script};
-use ckb_types::prelude::{Builder, Entity};
 use derive_more::Constructor;
 
 #[derive(Constructor)]
@@ -15,15 +14,6 @@ pub struct KoRequest {
 pub struct KoProject {
     pub cell_dep: CellDep,
     pub lua_code: Bytes,
-}
-
-impl Default for KoProject {
-    fn default() -> Self {
-        KoProject {
-            cell_dep: CellDep::new_builder().build(),
-            lua_code: Bytes::default(),
-        }
-    }
 }
 
 #[derive(Constructor)]
