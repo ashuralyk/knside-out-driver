@@ -1,6 +1,5 @@
 use ko_protocol::types::config::KoConfig;
 use ko_protocol::KoResult;
-use toml;
 
 mod error;
 use error::ConfigError;

@@ -14,7 +14,7 @@ pub struct KoCellDep {
 impl From<&KoCellDep> for CellDep {
     fn from(cell_dep: &KoCellDep) -> Self {
         CellDep::new_builder()
-            .out_point(OutPoint::new(cell_dep.transaction_hash.pack(), cell_dep.cell_index.into()))
+            .out_point(OutPoint::new(cell_dep.transaction_hash.pack(), cell_dep.cell_index))
             .dep_type(cell_dep.dep_type.into())
             .build()
     }

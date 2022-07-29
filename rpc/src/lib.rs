@@ -1,3 +1,3 @@
-use ko_rpc_backend;
+pub use ko_rpc_backend;
 
 // TODO

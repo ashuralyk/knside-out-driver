@@ -45,7 +45,7 @@ impl Backend for BackendImpl {
         contract: Bytes,
         address: String,
         project_code_hash: &H256,
-        project_cell_deps: &Vec<KoCellDep>,
+        project_cell_deps: &[KoCellDep],
     ) -> KoResult<(H256, H256)> {
         let mut rpc_client = IndexerRpcClient::new(&self.indexer_url);
 
@@ -89,7 +89,7 @@ impl Backend for BackendImpl {
         // fill knside-out transaction inputs
         let search = SearchKey {
             script: secp256k1_script.into(),
-            script_type: ScriptType::Lock.into(),
+            script_type: ScriptType::Lock,
             filter: None,
         };
         let (inputs, inputs_capacity) =
@@ -160,7 +160,7 @@ impl Backend for BackendImpl {
         contract: Bytes,
         address: String,
         project_type_args: &H256,
-        project_cell_deps: &Vec<KoCellDep>,
+        project_cell_deps: &[KoCellDep],
     ) -> KoResult<H256> {
         let mut rpc_client = IndexerRpcClient::new(&self.indexer_url);
 
@@ -168,7 +168,7 @@ impl Backend for BackendImpl {
         let project_type_script = helper::recover_type_id_script(project_type_args.as_bytes());
         let search_key = SearchKey {
             script: project_type_script.into(),
-            script_type: ScriptType::Type.into(),
+            script_type: ScriptType::Type,
             filter: None,
         };
         let result = rpc_client
@@ -205,7 +205,7 @@ impl Backend for BackendImpl {
         let inputs_capacity: u64 = deployment_cell.output.capacity.into();
         let search = SearchKey {
             script: secp256k1_script.into(),
-            script_type: ScriptType::Lock.into(),
+            script_type: ScriptType::Lock,
             filter: None,
         };
         let (mut inputs, inputs_capacity) =
@@ -259,7 +259,7 @@ impl Backend for BackendImpl {
         function_call: String,
         project_code_hash: &H256,
         project_type_args: &H256,
-        project_cell_deps: &Vec<KoCellDep>,
+        project_cell_deps: &[KoCellDep],
     ) -> KoResult<H256> {
         let mut rpc_client = IndexerRpcClient::new(&self.indexer_url);
         let mut ckb_client = CkbRpcClient::new(&self.ckb_url);
@@ -273,7 +273,7 @@ impl Backend for BackendImpl {
             .payload()
             .into();
         let personal_args = mol_flag_1(&project_type_id.0);
-        let personal_script = helper::build_knsideout_script(&project_code_hash, &personal_args);
+        let personal_script = helper::build_knsideout_script(project_code_hash, &personal_args);
 
         // check previous cell
         let mut previous_json_data = String::new();
@@ -307,7 +307,7 @@ impl Backend for BackendImpl {
             &function_call,
             secp256k1_script.as_slice(),
         );
-        let request_script = helper::build_knsideout_script(&project_code_hash, &request_args);
+        let request_script = helper::build_knsideout_script(project_code_hash, &request_args);
         let mut outputs = vec![
             // reqeust cell
             CellOutput::new_builder()
@@ -330,7 +330,7 @@ impl Backend for BackendImpl {
         // fill reqeust transaction inputs
         let search = SearchKey {
             script: secp256k1_script.into(),
-            script_type: ScriptType::Lock.into(),
+            script_type: ScriptType::Lock,
             filter: None,
         };
         let (mut extra_inputs, inputs_capacity) =
@@ -449,7 +449,7 @@ impl Backend for BackendImpl {
             result
                 .objects
                 .into_iter()
-                .map(|cell| {
+                .try_for_each::<_, KoResult<_>>(|cell| {
                     let json_data = {
                         let bytes = cell.output_data.as_bytes();
                         String::from_utf8(bytes.to_vec()).map_err(|_| {
@@ -458,8 +458,7 @@ impl Backend for BackendImpl {
                     };
                     personal_json_data.push((json_data, cell.out_point.into()));
                     Ok(())
-                })
-                .collect::<KoResult<_>>()?;
+                })?;
             if result.last_cursor.is_empty() {
                 break;
             }

@@ -8,7 +8,7 @@ use ckb_types::H256;
 pub trait Driver {
     fn prepare_ko_transaction_normal_celldeps(
         &mut self,
-        project_cell_deps: &Vec<KoCellDep>,
+        project_cell_deps: &[KoCellDep],
     ) -> KoResult<Vec<CellDep>>;
 
     fn sign_ko_transaction(&self, tx: &TransactionView) -> Bytes;

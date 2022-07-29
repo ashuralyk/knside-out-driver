@@ -23,7 +23,7 @@ impl DriverImpl {
     pub fn new(ckb_url: &str, privkey: &SecretKey) -> DriverImpl {
         DriverImpl {
             rpc_client: CkbRpcClient::new(ckb_url),
-            privkey: privkey.clone(),
+            privkey: *privkey,
         }
     }
 }
@@ -31,7 +31,7 @@ impl DriverImpl {
 impl Driver for DriverImpl {
     fn prepare_ko_transaction_normal_celldeps(
         &mut self,
-        project_cell_deps: &Vec<KoCellDep>,
+        project_cell_deps: &[KoCellDep],
     ) -> KoResult<Vec<CellDep>> {
         let cell_deps = project_cell_deps
             .iter()

@@ -9,7 +9,7 @@ pub trait Executor {
         &self,
         global_json_data: &Bytes,
         project_owner: &H256,
-        user_requests: &Vec<KoRequest>,
+        user_requests: &[KoRequest],
         project_lua_code: &Bytes,
     ) -> KoResult<KoExecuteReceipt>;
 }

@@ -96,39 +96,35 @@ pub fn mol_flag_2_raw(bytes: &[u8]) -> Option<generated::Flag2> {
 }
 
 pub fn is_mol_flag_0(bytes: &[u8], hash: Option<&[u8; 32]>) -> bool {
-    if bytes.len() > 0 && bytes[0] == 0u8 {
-        if generated::Flag0Reader::verify(&bytes[1..], false).is_ok() {
-            if let Some(hash) = hash {
-                let flag_0 = generated::Flag0::new_unchecked(Bytes::from(bytes[1..].to_vec()));
-                if flag_0.project_id().as_slice() == hash.as_slice() {
-                    return true;
-                }
-            } else {
+    if !bytes.is_empty() && bytes[0] == 0u8 && generated::Flag0Reader::verify(&bytes[1..], false).is_ok() {
+        if let Some(hash) = hash {
+            let flag_0 = generated::Flag0::new_unchecked(Bytes::from(bytes[1..].to_vec()));
+            if flag_0.project_id().as_slice() == hash.as_slice() {
                 return true;
             }
+        } else {
+            return true;
         }
     }
-    return false;
+    false
 }
 
 pub fn is_mol_flag_1(bytes: &[u8], hash: Option<&[u8; 32]>) -> bool {
-    if bytes.len() > 0 && bytes[0] == 1u8 {
-        if generated::Flag1Reader::verify(&bytes[1..], false).is_ok() {
-            if let Some(hash) = hash {
-                let flag_1 = generated::Flag1::new_unchecked(Bytes::from(bytes[1..].to_vec()));
-                if flag_1.project_id().as_slice() == hash.as_slice() {
-                    return true;
-                }
-            } else {
+    if !bytes.is_empty() && bytes[0] == 1u8 && generated::Flag1Reader::verify(&bytes[1..], false).is_ok() {
+        if let Some(hash) = hash {
+            let flag_1 = generated::Flag1::new_unchecked(Bytes::from(bytes[1..].to_vec()));
+            if flag_1.project_id().as_slice() == hash.as_slice() {
                 return true;
             }
+        } else {
+            return true;
         }
     }
-    return false;
+    false
 }
 
 pub fn is_mol_flag_2(bytes: &[u8]) -> bool {
-    if bytes.len() > 0 && bytes[0] == 2u8 {
+    if !bytes.is_empty() && bytes[0] == 2u8 {
         generated::Flag2Reader::verify(&bytes[1..], false).is_ok()
     } else {
         false

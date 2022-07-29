@@ -57,7 +57,7 @@ where
     pub async fn start(
         mut self,
         project_type_args: &H256,
-        project_cell_deps: &Vec<KoCellDep>,
+        project_cell_deps: &[KoCellDep],
     ) -> KoResult<()> {
         self.project_dep = self
             .ko_assembler

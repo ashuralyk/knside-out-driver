@@ -114,7 +114,7 @@ pub fn get_global_json_data(contract: &Bytes) -> KoResult<String> {
     Ok(global_data_json)
 }
 
-pub fn calc_outputs_capacity(outputs: &Vec<CellOutput>, fee: &str) -> u64 {
+pub fn calc_outputs_capacity(outputs: &[CellOutput], fee: &str) -> u64 {
     let mut outputs_capacity = outputs
         .iter()
         .map(|output| output.capacity().unpack())

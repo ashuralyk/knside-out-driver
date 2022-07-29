@@ -29,8 +29,8 @@ impl AssemblerImpl {
             .calc_script_hash()
             .unpack();
         AssemblerImpl {
+            project_id,
             rpc_client: IndexerRpcClient::new(indexer_url),
-            project_id: project_id,
             project_code_hash: code_hash.clone(),
         }
     }
@@ -42,7 +42,7 @@ impl Assembler for AssemblerImpl {
         project_deployment_args: &H256,
     ) -> KoResult<KoProject> {
         let project_cell =
-            helper::search_project_cell(&mut self.rpc_client, &project_deployment_args)?;
+            helper::search_project_cell(&mut self.rpc_client, project_deployment_args)?;
         let project_celldep = CellDep::new_builder()
             .out_point(project_cell.out_point)
             .dep_type(DepType::Code.into())
@@ -54,7 +54,7 @@ impl Assembler for AssemblerImpl {
     fn generate_ko_transaction_with_inputs_and_celldeps(
         &mut self,
         cell_number: u8,
-        cell_deps: &Vec<CellDep>,
+        cell_deps: &[CellDep],
     ) -> KoResult<(TransactionView, KoAssembleReceipt)> {
         // find project global cell
         let global_cell = helper::search_global_cell(
@@ -68,7 +68,7 @@ impl Assembler for AssemblerImpl {
                     .previous_output(global_cell.out_point)
                     .build(),
             )
-            .cell_deps(cell_deps.clone())
+            .cell_deps(cell_deps.to_vec())
             .build();
         // fill transaction inputs and collect KnsideOut requests
         let mut requests = vec![];
@@ -87,7 +87,7 @@ impl Assembler for AssemblerImpl {
             result
                 .objects
                 .into_iter()
-                .map(|cell| {
+                .try_for_each::<_, KoResult<_>>(|cell| {
                     let output = cell.output.into();
                     if helper::check_valid_request(
                         &output,
@@ -125,8 +125,7 @@ impl Assembler for AssemblerImpl {
                             .build();
                     }
                     Ok(())
-                })
-                .collect::<KoResult<_>>()?;
+                })?;
             if result.last_cursor.is_empty() {
                 break;
             }
@@ -135,7 +134,7 @@ impl Assembler for AssemblerImpl {
         let receipt = KoAssembleReceipt::new(
             requests,
             global_cell.output_data,
-            global_cell.output.lock().clone(),
+            global_cell.output.lock(),
             total_inputs_capacity,
         );
         Ok((ko_tx, receipt))
@@ -144,7 +143,7 @@ impl Assembler for AssemblerImpl {
     fn fill_ko_transaction_with_outputs(
         &self,
         mut tx: TransactionView,
-        cell_outputs: &Vec<KoCellOutput>,
+        cell_outputs: &[KoCellOutput],
         inputs_capacity: u64,
     ) -> KoResult<TransactionView> {
         // collect output cells and their total capacity

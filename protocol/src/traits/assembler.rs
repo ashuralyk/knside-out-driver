@@ -13,13 +13,13 @@ pub trait Assembler {
     fn generate_ko_transaction_with_inputs_and_celldeps(
         &mut self,
         cell_number: u8,
-        cell_deps: &Vec<CellDep>,
+        cell_deps: &[CellDep],
     ) -> KoResult<(TransactionView, KoAssembleReceipt)>;
 
     fn fill_ko_transaction_with_outputs(
         &self,
         tx: TransactionView,
-        cell_outputs: &Vec<KoCellOutput>,
+        cell_outputs: &[KoCellOutput],
         inputs_capacity: u64,
     ) -> KoResult<TransactionView>;
 

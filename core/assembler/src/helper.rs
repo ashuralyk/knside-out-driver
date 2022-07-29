@@ -88,11 +88,11 @@ pub fn check_valid_request(cell: &CellOutput, code_hash: &H256, project_id: &H25
     } else {
         return false;
     }
-    return true;
+    true
 }
 
 pub fn extract_project_lua_code(deployment_bytes: &Bytes) -> KoResult<Bytes> {
-    if let Some(deployment) = mol_deployment_raw(&deployment_bytes) {
+    if let Some(deployment) = mol_deployment_raw(deployment_bytes) {
         Ok(deployment.code().raw_data())
     } else {
         Err(AssemblerError::UnsupportedDeploymentFormat.into())
