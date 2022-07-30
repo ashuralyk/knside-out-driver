@@ -26,7 +26,6 @@ pub struct KoAssembleReceipt {
 
 #[derive(Constructor)]
 pub struct KoCellOutput {
-    pub data: Bytes,
+    pub data: Option<Bytes>,
     pub lock_script: Script,
-    pub payment: u64,
 }

@@ -95,16 +95,15 @@ impl<C: CkbClient> Assembler for AssemblerImpl<C> {
                     let flag_2 =
                         ko_protocol::mol_flag_2_raw(&output.lock().args().raw_data().to_vec())
                             .expect("flag_2 molecule");
-                    let lock_script =
-                        Script::from_slice(&flag_2.caller_lockscript().raw_data())
-                            .map_err(|_| AssemblerError::UnsupportedCallerScriptFormat)?;
+                    let lock_script = Script::from_slice(&flag_2.caller_lockscript().raw_data())
+                        .map_err(|_| AssemblerError::UnsupportedCallerScriptFormat)?;
                     let payment = {
                         let capacity: u64 = output.capacity().unpack();
                         total_inputs_capacity += capacity;
-                        let exact_capacity =
-                            Capacity::bytes(output.as_bytes().len() + cell.output_data.len())
-                                .unwrap()
-                                .as_u64();
+                        let exact_capacity = output
+                            .occupied_capacity(Capacity::bytes(cell.output_data.len()).unwrap())
+                            .unwrap()
+                            .as_u64();
                         capacity - exact_capacity
                     };
                     requests.push(KoRequest::new(
@@ -153,63 +152,56 @@ impl<C: CkbClient> Assembler for AssemblerImpl<C> {
             } else {
                 helper::make_personal_script(&self.project_code_hash, &self.project_id)
             };
-            if output.data.is_empty() {
-                outputs.push(
-                    CellOutput::new_builder()
-                        .lock(output.lock_script.clone())
-                        .build_exact_capacity(Capacity::shannons(output.payment))
-                        .unwrap(),
-                );
-            } else {
-                let capacity = {
-                    let capacity = Capacity::bytes(output.data.len()).unwrap();
-                    capacity
-                        .safe_add(Capacity::shannons(output.payment))
-                        .unwrap()
-                };
+            if let Some(data) = &output.data {
                 outputs.push(
                     CellOutput::new_builder()
                         .lock(output.lock_script.clone())
                         .type_(Some(type_).pack())
-                        .build_exact_capacity(capacity)
+                        .build_exact_capacity(Capacity::bytes(data.len()).unwrap())
                         .unwrap(),
                 );
+                outputs_data.push(data.clone());
+            } else {
+                outputs.push(
+                    CellOutput::new_builder()
+                        .lock(output.lock_script.clone())
+                        .build_exact_capacity(Capacity::zero())
+                        .unwrap(),
+                );
+                outputs_data.push(Bytes::new());
             }
             let capacity: u64 = outputs.last().unwrap().capacity().unpack();
             outputs_capacity += capacity;
-            outputs_data.push(output.data.clone());
         });
         // firstly check inputs/outputs capacity
         if inputs_capacity <= outputs_capacity {
-            return Err(AssemblerError::TransactionCapacityError(
-                inputs_capacity,
-                outputs_capacity,
+            return Err(AssemblerError::InsufficientGlobalCellCapacity(
+                outputs_capacity - inputs_capacity,
             )
             .into());
         }
         // complete transaction outputs
         let fee = Capacity::bytes(1).unwrap().as_u64();
-        if !outputs.is_empty() {
-            let global_capacity: u64 = {
-                let capacity: u64 = outputs[0].capacity().unpack();
-                inputs_capacity - outputs_capacity - fee + capacity
-            };
-            outputs[0] = outputs[0]
-                .clone()
-                .as_builder()
-                .capacity(global_capacity.pack())
-                .build();
-        }
+        let global_capacity: u64 = {
+            let capacity: u64 = outputs[0].capacity().unpack();
+            inputs_capacity - outputs_capacity - fee + capacity
+        };
+        outputs[0] = outputs[0]
+            .clone()
+            .as_builder()
+            .capacity(global_capacity.pack())
+            .build();
         tx = tx
             .as_advanced_builder()
             .outputs(outputs)
             .outputs_data(outputs_data.pack())
             .build();
         // secondly check inputs/outputs capacity as a barrier
-        if inputs_capacity <= tx.outputs_capacity().unwrap().as_u64() {
+        let outputs_capacity = tx.outputs_capacity().unwrap().as_u64();
+        if inputs_capacity <= outputs_capacity {
             return Err(AssemblerError::TransactionCapacityError(
                 inputs_capacity,
-                tx.outputs_capacity().unwrap().as_u64(),
+                outputs_capacity,
             )
             .into());
         }

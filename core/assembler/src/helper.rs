@@ -63,7 +63,7 @@ pub async fn search_global_cell(
 pub fn make_global_script(code_hash: &H256, project_id: &H256) -> Script {
     Script::new_builder()
         .code_hash(code_hash.pack())
-        .hash_type(ScriptHashType::Data1.into())
+        .hash_type(ScriptHashType::Data.into())
         .args(mol_flag_0(&project_id.0).as_slice().pack())
         .build()
 }

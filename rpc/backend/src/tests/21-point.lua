@@ -21,7 +21,7 @@ function battle_win()
     global.users[msg.sender] = user
     return {
         owner = msg.sender,
-        data = {}
+        data = nil
     }
 end
 
@@ -37,7 +37,7 @@ function battle_lose()
     global.users[msg.sender] = user
     return {
         owner = msg.sender,
-        data = {}
+        data = nil
     }
 end
 

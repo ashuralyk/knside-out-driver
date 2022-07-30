@@ -2,7 +2,7 @@ use std::time::Duration;
 
 use ko_protocol::ckb_types::packed::CellDep;
 use ko_protocol::ckb_types::prelude::Unpack;
-use ko_protocol::ckb_types::{H256, bytes::Bytes};
+use ko_protocol::ckb_types::{bytes::Bytes, H256};
 use ko_protocol::tokio;
 use ko_protocol::traits::{Assembler, Driver, Executor};
 use ko_protocol::types::assembler::KoCellOutput;
@@ -52,18 +52,16 @@ where
         self
     }
 
-    pub async fn start(
-        self,
-        project_cell_deps: &[KoCellDep],
-    ) -> KoResult<()> {
+    pub async fn start(self, project_cell_deps: &[KoCellDep]) -> KoResult<()> {
         let project_dep = self
             .ko_assembler
             .prepare_ko_transaction_project_celldep()
             .await?;
-        let transaction_deps = self
+        let mut transaction_deps = self
             .ko_driver
             .prepare_ko_transaction_normal_celldeps(project_cell_deps)
             .await?;
+        transaction_deps.insert(0, project_dep.cell_dep);
         let mut interval = tokio::time::interval(self.drive_interval);
 
         loop {
@@ -86,7 +84,7 @@ where
             .ko_assembler
             .generate_ko_transaction_with_inputs_and_celldeps(
                 self.max_reqeusts_count,
-                &project_cell_deps,
+                project_cell_deps,
             )
             .await?;
         if receipt.requests.is_empty() {
@@ -96,25 +94,17 @@ where
             &receipt.global_json_data,
             &receipt.global_lockscript.calc_script_hash().unpack(),
             &receipt.requests,
-            &project_lua_code,
+            project_lua_code,
         )?;
         let mut cell_outputs = vec![KoCellOutput::new(
-            receipt.global_json_data,
+            Some(result.global_json_data),
             receipt.global_lockscript,
-            0,
         )];
         // assemble transaction outputs import
-        receipt
-            .requests
-            .into_iter()
-            .enumerate()
-            .for_each(|(i, request)| {
-                cell_outputs.push(KoCellOutput::new(
-                    result.outputs_json_data[i].clone(),
-                    request.lock_script,
-                    result.required_payments[i],
-                ));
-            });
+        for i in 0..receipt.requests.len() {
+            let (data, lock_script) = result.personal_outputs[i].clone();
+            cell_outputs.push(KoCellOutput::new(data, lock_script));
+        }
         let tx = self
             .ko_assembler
             .fill_ko_transaction_with_outputs(tx, &cell_outputs, receipt.total_inputs_capacity)

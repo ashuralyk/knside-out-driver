@@ -1,8 +1,9 @@
 use ckb_types::bytes::Bytes;
+use ckb_types::packed::Script;
 use derive_more::Constructor;
 
 #[derive(Constructor)]
 pub struct KoExecuteReceipt {
-    pub outputs_json_data: Vec<Bytes>,
-    pub required_payments: Vec<u64>,
+    pub global_json_data: Bytes,
+    pub personal_outputs: Vec<(Option<Bytes>, Script)>,
 }
