@@ -22,6 +22,9 @@ pub enum AssemblerError {
     #[display(fmt = "Caller lock_script format is not supported")]
     UnsupportedCallerScriptFormat,
 
+    #[display(fmt = "Recipient lock_script format is not supported")]
+    UnsupportedRecipientScriptFormat,
+
     #[display(fmt = "Global cell needs more {} ckb", _0)]
     InsufficientGlobalCellCapacity(u64),
 

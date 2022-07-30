@@ -97,6 +97,16 @@ impl<C: CkbClient> Assembler for AssemblerImpl<C> {
                             .expect("flag_2 molecule");
                     let lock_script = Script::from_slice(&flag_2.caller_lockscript().raw_data())
                         .map_err(|_| AssemblerError::UnsupportedCallerScriptFormat)?;
+                    let recipient_script = {
+                        let script = flag_2.recipient_lockscript().to_opt();
+                        if let Some(inner) = script {
+                            let script = Script::from_slice(&inner.raw_data())
+                                .map_err(|_| AssemblerError::UnsupportedRecipientScriptFormat)?;
+                            Some(script)
+                        } else {
+                            None
+                        }
+                    };
                     let payment = {
                         let capacity: u64 = output.capacity().unpack();
                         total_inputs_capacity += capacity;
@@ -110,6 +120,7 @@ impl<C: CkbClient> Assembler for AssemblerImpl<C> {
                         cell.output_data.into_bytes(),
                         flag_2.function_call().raw_data(),
                         lock_script,
+                        recipient_script,
                         payment,
                     ));
                     ko_tx = ko_tx

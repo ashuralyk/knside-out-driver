@@ -23,6 +23,7 @@ pub trait Backend {
     async fn create_project_request_digest(
         &mut self,
         address: String,
+        recipient: Option<String>,
         previous_cell: Option<OutPoint>,
         function_call: String,
         project_code_hash: &H256,

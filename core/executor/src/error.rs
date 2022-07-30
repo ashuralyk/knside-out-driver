@@ -30,6 +30,9 @@ pub enum ExecutorError {
     )]
     InsufficientRequiredCkb(u64, u64, usize),
 
+    #[display(fmt = "owner mismatch, {} != {}", _0, _1)]
+    OwnerLockhashMismatch(String, String),
+
     #[display(fmt = "Lua code execution error = {}", _0)]
     LuaVmError(String),
 }

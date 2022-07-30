@@ -9,6 +9,7 @@ edition = "2021"
 ko-protocol = { path = "../protocol" }
 
 [dev-dependencies]
+hex = "0.4"
 ko-core-assembler = { path = "./assembler" }
 ko-core-driver = { path = "./driver" }
 ko-core-executor = { path = "./executor" }

@@ -254,6 +254,7 @@ impl<C: CkbClient> Backend for BackendImpl<C> {
     async fn create_project_request_digest(
         &mut self,
         address: String,
+        recipient: Option<String>,
         previous_cell: Option<OutPoint>,
         function_call: String,
         project_code_hash: &H256,
@@ -268,6 +269,17 @@ impl<C: CkbClient> Backend for BackendImpl<C> {
             .map_err(|_| BackendError::InvalidAddressFormat(address))?
             .payload()
             .into();
+        let recipient_secp256k1_script = {
+            if let Some(recipient) = recipient {
+                let script: Script = Address::from_str(&recipient)
+                    .map_err(|_| BackendError::InvalidAddressFormat(recipient))?
+                    .payload()
+                    .into();
+                Some(script)
+            } else {
+                None
+            }
+        };
         let personal_args = mol_flag_1(&project_type_id.0);
         let personal_script = helper::build_knsideout_script(project_code_hash, &personal_args);
 
@@ -301,9 +313,9 @@ impl<C: CkbClient> Backend for BackendImpl<C> {
 
         // build reqeust transaction outputs
         let request_args = mol_flag_2(
-            &project_type_id.0,
             &function_call,
             secp256k1_script.as_slice(),
+            recipient_secp256k1_script.map(|v| v.as_bytes()),
         );
         let request_script = helper::build_knsideout_script(project_code_hash, &request_args);
         let mut outputs = vec![

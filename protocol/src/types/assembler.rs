@@ -7,6 +7,7 @@ pub struct KoRequest {
     pub json_data: Bytes,
     pub function_call: Bytes,
     pub lock_script: Script,
+    pub recipient_script: Option<Script>,
     pub payment: u64,
 }
 

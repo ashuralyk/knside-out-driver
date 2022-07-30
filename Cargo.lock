@@ -876,6 +876,7 @@ dependencies = [
 name = "ko-core"
 version = "0.1.0"
 dependencies = [
+ "hex",
  "ko-core-assembler",
  "ko-core-driver",
  "ko-core-executor",

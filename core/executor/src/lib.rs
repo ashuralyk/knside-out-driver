@@ -8,11 +8,13 @@ use ko_protocol::derive_more::Constructor;
 use ko_protocol::traits::Executor;
 use ko_protocol::types::{assembler::KoRequest, executor::KoExecuteReceipt};
 use ko_protocol::{serde_json, KoResult};
-use mlua::{Lua, LuaSerdeExt, Table, Value};
+use mlua::{Lua, LuaSerdeExt, Table};
 
 mod error;
+mod helper;
 use error::ExecutorError;
 
+#[macro_export]
 macro_rules! luac {
     ($res:expr) => {
         $res.map_err(|err| ExecutorError::from(err))?
@@ -56,60 +58,7 @@ impl Executor for ExecutorImpl {
         luac!(msg.set("global", global_table));
         luac!(lua.globals().set("msg", msg));
         // running each user function_call requests
-        let personal_outputs = user_requests
-            .iter()
-            .enumerate()
-            .map(|(i, request)| {
-                let msg: Table = luac!(lua.globals().get("msg"));
-                let request_owner = request.lock_script.calc_script_hash();
-                luac!(msg.set("sender", hex::encode(request_owner.raw_data())));
-                let personal_table = {
-                    let json_string = String::from_utf8(request.json_data.to_vec())
-                        .map_err(|_| ExecutorError::InvalidUTF8FormatForPersonalData)?;
-                    if json_string.is_empty() {
-                        Value::Table(luac!(lua.create_table()))
-                    } else {
-                        let value: serde_json::Value = serde_json::from_str(&json_string)
-                            .map_err(|_| ExecutorError::InvalidJsonFormatForPersonalData)?;
-                        luac!(lua.to_value(&value))
-                    }
-                };
-                luac!(msg.set("data", personal_table));
-                luac!(lua.globals().set("msg", msg));
-                luac!(lua.globals().set("i", i));
-                let function_call = {
-                    let mut call = b"return ".to_vec();
-                    call.append(&mut request.function_call.to_vec());
-                    call
-                };
-                let return_table: Table = lua.load(&function_call).call(()).map_err(|err| {
-                    ExecutorError::ErrorLoadRequestLuaCode(
-                        String::from_utf8(request.function_call.to_vec()).unwrap(),
-                        err.to_string(),
-                    )
-                })?;
-                let output_data: Value = luac!(return_table.get("data"));
-                // generate cell_output data
-                let json_data = match output_data {
-                    Value::Nil => None,
-                    Value::Table(data) => {
-                        let data = serde_json::to_string(&data).unwrap();
-                        if data == "{}" {
-                            Some(Bytes::new())
-                        } else {
-                            Some(Bytes::from(data.as_bytes().to_vec()))
-                        }
-                    }
-                    _ => Err(ExecutorError::ErrorLoadRequestLuaCode(
-                        String::from_utf8(request.function_call.to_vec()).unwrap(),
-                        "the return value can only be nil or table".into(),
-                    ))?,
-                };
-                // TODO: leave code to handle `transfer` owner_lockscript
-                let owner_lockscript = request.lock_script.clone();
-                Ok((json_data, owner_lockscript))
-            })
-            .collect::<KoResult<Vec<_>>>()?;
+        let personal_outputs = helper::parse_requests_to_outputs(&lua, user_requests)?;
         // check input/output ckbs are wether matched
         user_requests
             .iter()

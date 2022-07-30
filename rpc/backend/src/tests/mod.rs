@@ -20,14 +20,14 @@ const OWNER_PRIVATE_KEY: H256 =
 const OWNER_ADDRESS: &str = "ckt1qyqycu3e597mvx7qpdpf45jdpn5u27w574rq8stzv3";
 
 const PROJECT_CODE_HASH: H256 =
-    h256!("0xe72d02d5a2dbf1b893e5b9ae17602395533b6b918cee67d234669c24b41cc4f7");
+    h256!("0xab83b71e59d9c17cae16de47dba6c570bdccf7a81b42d149ee44f2d433c628c3");
 const PROJECT_TYPE_ARGS: H256 =
-    h256!("0x8ee3bccb2a5b2cc0a04bdcef804ac39bb395dd64207c840c5764504d526c6d34");
+    h256!("0x31f5d68df13196cc53f07f66b9c52fed15b8aadeda1b6e76319ddc3d7468c741");
 
 const SECP256K1_TX_HASH: H256 =
     h256!("0x5c7b70f4fd242ff0fb703de908e2e7eef21621b640fe9a9c752643021a87bc1f");
 const KNSIDEOUT_TX_HASH: H256 =
-    h256!("0x6bbbd9a777fe6e115de76c01dac97afd24a1c54c0ebd06f0eb1a6bb42e512ead");
+    h256!("0x6322ef6fb705e398cc6da4be08ced99f2c0ff6828e9246f0fb9c871ccf17973d");
 
 async fn sign_and_push(rpc_client: &impl CkbClient, tx: TransactionView) {
     // sign transaction
@@ -120,6 +120,7 @@ async fn request_project_request_cell() {
     let digest = backend
         .create_project_request_digest(
             OWNER_ADDRESS.into(),
+            None,
             None,
             "battle_win()".into(),
             &PROJECT_CODE_HASH,
