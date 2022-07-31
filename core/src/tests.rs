@@ -18,14 +18,14 @@ const OWNER_PRIVATE_KEY: H256 =
     h256!("0x9a8fc5c463841c152800ec45ef4ceb03586177a7e6a9f34a6e40256310325e43");
 
 const PROJECT_CODE_HASH: H256 =
-    h256!("0xab83b71e59d9c17cae16de47dba6c570bdccf7a81b42d149ee44f2d433c628c3");
+    h256!("0x56a2ace407c9a1390896c2ddfd364c2eb56ce167a071206cf8c41f0fa5ed96a8");
 const PROJECT_TYPE_ARGS: H256 =
-    h256!("0x31f5d68df13196cc53f07f66b9c52fed15b8aadeda1b6e76319ddc3d7468c741");
+    h256!("0x75c82f2165f1c6b90e2b6a5d33ce556f30daeaba3f855c0b81b2fa1f9fe0e4cd");
 
 const SECP256K1_TX_HASH: H256 =
     h256!("0x5c7b70f4fd242ff0fb703de908e2e7eef21621b640fe9a9c752643021a87bc1f");
 const KNSIDEOUT_TX_HASH: H256 =
-    h256!("0x6322ef6fb705e398cc6da4be08ced99f2c0ff6828e9246f0fb9c871ccf17973d");
+    h256!("0xd08a5e45937c8dbe850f1bad6bdb3a613c06ca6cad9743905f42a4396ada785f");
 
 #[tokio::test]
 async fn drive_one() {

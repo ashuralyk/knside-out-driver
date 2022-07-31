@@ -8,6 +8,7 @@ function construct ()
 end
 
 function battle_win()
+    assert(not msg.data, "only allow no-data mode")
     local global = msg.global
     global.battle_count = global.battle_count + 1
     local user = global.users[msg.sender] or {
@@ -17,7 +18,7 @@ function battle_win()
     }
     user.win_count = user.win_count + 1
     table.insert(user.nfts, global.nft_token_id)
-    global.nft_token_id = global.nft_token_id + 1 
+    global.nft_token_id = global.nft_token_id + 1
     global.users[msg.sender] = user
     return {
         owner = msg.sender,
@@ -26,6 +27,7 @@ function battle_win()
 end
 
 function battle_lose()
+    assert(not msg.data, "only allow no-data mode")
     local global = msg.global
     global.battle_count = global.battle_count + 1
     local user = global.users[msg.sender] or {
@@ -42,19 +44,20 @@ function battle_lose()
 end
 
 function claim_nfts()
+    local data = msg.data or {}
     local user = msg.global.users[msg.sender]
     assert(user and #user.nfts > 0, "no user or nfts")
     local reward_nfts = user.nfts
     user.nfts = {}
-    if #msg.data > 0 then
+    if #data > 0 then
         for _, nft_id in ipairs(reward_nfts) do
-            table.insert(msg.data, nft_id)
+            table.insert(data, nft_id)
         end
     else
-        msg.data = reward_nfts
+        data = reward_nfts
     end
     return {
         owner = msg.sender,
-        data = msg.data
+        data = data
     }
 end

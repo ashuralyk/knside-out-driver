@@ -26,18 +26,12 @@ pub fn parse_requests_to_outputs(
             };
             luac!(msg.set("sender", hex::encode(request_owner.raw_data())));
             luac!(msg.set("recipient", hex::encode(recipient_owner.raw_data())));
-            let personal_table = {
-                let json_string = String::from_utf8(request.json_data.to_vec())
-                    .map_err(|_| ExecutorError::InvalidUTF8FormatForPersonalData)?;
-                if json_string.is_empty() {
-                    Value::Table(luac!(lua.create_table()))
-                } else {
-                    let value: serde_json::Value = serde_json::from_str(&json_string)
-                        .map_err(|_| ExecutorError::InvalidJsonFormatForPersonalData)?;
-                    luac!(lua.to_value(&value))
-                }
-            };
-            luac!(msg.set("data", personal_table));
+            if !request.json_data.is_empty() {
+                let value: serde_json::Value = serde_json::from_slice(&request.json_data)
+                    .map_err(|_| ExecutorError::InvalidJsonFormatForPersonalData)?;
+                let personal_table = luac!(lua.to_value(&value));
+                luac!(msg.set("data", personal_table));
+            }
             luac!(lua.globals().set("msg", msg));
             luac!(lua.globals().set("i", i));
             let function_call = {
@@ -71,11 +65,7 @@ pub fn parse_requests_to_outputs(
                 Value::Nil => None,
                 Value::Table(data) => {
                     let data = serde_json::to_string(&data).unwrap();
-                    if data == "{}" {
-                        Some(Bytes::new())
-                    } else {
-                        Some(Bytes::from(data.as_bytes().to_vec()))
-                    }
+                    Some(Bytes::from(data.as_bytes().to_vec()))
                 }
                 _ => Err(ExecutorError::ErrorLoadRequestLuaCode(
                     String::from_utf8(request.function_call.to_vec()).unwrap(),

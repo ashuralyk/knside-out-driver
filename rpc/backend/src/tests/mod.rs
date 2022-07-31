@@ -20,14 +20,14 @@ const OWNER_PRIVATE_KEY: H256 =
 const OWNER_ADDRESS: &str = "ckt1qyqycu3e597mvx7qpdpf45jdpn5u27w574rq8stzv3";
 
 const PROJECT_CODE_HASH: H256 =
-    h256!("0xab83b71e59d9c17cae16de47dba6c570bdccf7a81b42d149ee44f2d433c628c3");
+    h256!("0x56a2ace407c9a1390896c2ddfd364c2eb56ce167a071206cf8c41f0fa5ed96a8");
 const PROJECT_TYPE_ARGS: H256 =
-    h256!("0x31f5d68df13196cc53f07f66b9c52fed15b8aadeda1b6e76319ddc3d7468c741");
+    h256!("0x75c82f2165f1c6b90e2b6a5d33ce556f30daeaba3f855c0b81b2fa1f9fe0e4cd");
 
 const SECP256K1_TX_HASH: H256 =
     h256!("0x5c7b70f4fd242ff0fb703de908e2e7eef21621b640fe9a9c752643021a87bc1f");
 const KNSIDEOUT_TX_HASH: H256 =
-    h256!("0x6322ef6fb705e398cc6da4be08ced99f2c0ff6828e9246f0fb9c871ccf17973d");
+    h256!("0xd08a5e45937c8dbe850f1bad6bdb3a613c06ca6cad9743905f42a4396ada785f");
 
 async fn sign_and_push(rpc_client: &impl CkbClient, tx: TransactionView) {
     // sign transaction
@@ -114,15 +114,28 @@ async fn request_project_request_cell() {
         KoCellDep::new(KNSIDEOUT_TX_HASH.clone(), 0, DepType::Code.into()),
     ];
 
-    // create digest
+    // search previous personal cell
     let rpc_client = RpcClient::new(CKB_URL, CKB_INDEXER_URL);
     let mut backend = BackendImpl::new(&rpc_client);
+    let personal_data = backend
+        .search_personal_data(OWNER_ADDRESS.into(), &PROJECT_CODE_HASH, &PROJECT_TYPE_ARGS)
+        .await
+        .expect("search personal");
+    let previous_cell = {
+        if let Some((_, outpoint)) = personal_data.first() {
+            Some(outpoint.clone())
+        } else {
+            None
+        }
+    };
+    println!("previous = {:?}", previous_cell);
+    // create digest
     let digest = backend
         .create_project_request_digest(
             OWNER_ADDRESS.into(),
             None,
-            None,
-            "battle_win()".into(),
+            previous_cell,
+            "claim_nfts()".into(),
             &PROJECT_CODE_HASH,
             &PROJECT_TYPE_ARGS,
             &cell_deps,

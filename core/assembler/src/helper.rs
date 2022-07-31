@@ -41,7 +41,7 @@ pub async fn search_global_cell(
 ) -> KoResult<LiveCell> {
     let global_typescript = Script::new_builder()
         .code_hash(code_hash.pack())
-        .hash_type(ScriptHashType::Data.into())
+        .hash_type(ScriptHashType::Data1.into())
         .args(mol_flag_0(&project_id.0).as_slice().pack())
         .build();
     let search_key = SearchKey {
@@ -63,7 +63,7 @@ pub async fn search_global_cell(
 pub fn make_global_script(code_hash: &H256, project_id: &H256) -> Script {
     Script::new_builder()
         .code_hash(code_hash.pack())
-        .hash_type(ScriptHashType::Data.into())
+        .hash_type(ScriptHashType::Data1.into())
         .args(mol_flag_0(&project_id.0).as_slice().pack())
         .build()
 }
@@ -71,7 +71,7 @@ pub fn make_global_script(code_hash: &H256, project_id: &H256) -> Script {
 pub fn make_personal_script(code_hash: &H256, project_id: &H256) -> Script {
     Script::new_builder()
         .code_hash(code_hash.pack())
-        .hash_type(ScriptHashType::Data.into())
+        .hash_type(ScriptHashType::Data1.into())
         .args(mol_flag_1(&project_id.0).as_slice().pack())
         .build()
 }
@@ -79,7 +79,7 @@ pub fn make_personal_script(code_hash: &H256, project_id: &H256) -> Script {
 pub fn check_valid_request(cell: &CellOutput, code_hash: &H256) -> bool {
     let lock = &cell.lock();
     if lock.code_hash().as_slice() != code_hash.as_bytes()
-        || lock.hash_type() != ScriptHashType::Data.into()
+        || lock.hash_type() != ScriptHashType::Data1.into()
         || !is_mol_flag_2(&lock.args().raw_data().to_vec())
     {
         return false;
