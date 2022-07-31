@@ -20,6 +20,7 @@ pub trait Backend {
         project_cell_deps: &[KoCellDep],
     ) -> KoResult<H256>;
 
+    #[allow(clippy::too_many_arguments)]
     async fn create_project_request_digest(
         &mut self,
         address: String,

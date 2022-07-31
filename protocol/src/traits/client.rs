@@ -14,6 +14,8 @@ pub trait CkbClient: Send + Sync + Clone {
     // ckb api
     fn get_block_by_number(&self, number: BlockNumber) -> RPC<BlockView>;
 
+    fn get_block(&self, hash: &H256) -> RPC<BlockView>;
+
     fn get_tip_header(&self) -> RPC<HeaderView>;
 
     fn get_transaction(&self, hash: &H256) -> RPC<Option<TransactionWithStatus>>;

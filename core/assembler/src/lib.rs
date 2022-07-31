@@ -89,7 +89,7 @@ impl<C: CkbClient> Assembler for AssemblerImpl<C> {
                 .try_for_each::<_, KoResult<_>>(|cell| {
                     let output = cell.output.into();
                     if !helper::check_valid_request(&output, &self.project_code_hash) {
-                        println!("[Warn] find invalid reqeust format");
+                        // println!("[WARN] find invalid reqeust format");
                         return Ok(());
                     }
                     let flag_2 =

@@ -12,6 +12,9 @@ pub enum DriverError {
 
     #[display(fmt = "Rpc send_transaction error: {}, tx = {}", _0, _1)]
     TransactionSendError(String, String),
+
+    #[display(fmt = "Rpc get_transaction error: {}, hash = {}", _0, _1)]
+    TransactionFetchError(String, H256),
 }
 
 impl std::error::Error for DriverError {}

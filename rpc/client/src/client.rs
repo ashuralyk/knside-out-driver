@@ -105,6 +105,10 @@ impl CkbClient for RpcClient {
         jsonrpc!("get_block_by_number", Target::CKB, self, BlockView, number).boxed()
     }
 
+    fn get_block(&self, hash: &H256) -> RPC<BlockView> {
+        jsonrpc!("get_block", Target::CKB, self, BlockView, hash).boxed()
+    }
+
     fn get_tip_header(&self) -> RPC<HeaderView> {
         jsonrpc!("get_tip_header", Target::CKB, self, HeaderView).boxed()
     }

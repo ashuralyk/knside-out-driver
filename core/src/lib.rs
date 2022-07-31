@@ -3,11 +3,10 @@ use std::time::Duration;
 use ko_protocol::ckb_types::packed::CellDep;
 use ko_protocol::ckb_types::prelude::Unpack;
 use ko_protocol::ckb_types::{bytes::Bytes, H256};
-use ko_protocol::tokio;
 use ko_protocol::traits::{Assembler, Driver, Executor};
 use ko_protocol::types::assembler::KoCellOutput;
 use ko_protocol::types::config::KoCellDep;
-use ko_protocol::KoResult;
+use ko_protocol::{tokio, KoResult};
 
 #[cfg(test)]
 mod tests;
@@ -62,15 +61,20 @@ where
             .prepare_ko_transaction_normal_celldeps(project_cell_deps)
             .await?;
         transaction_deps.insert(0, project_dep.cell_dep);
-        let mut interval = tokio::time::interval(self.drive_interval);
 
+        println!("[INFO] knside-out drive server started, enter drive loop");
         loop {
-            let (hash, _) = tokio::join!(
-                self.drive(&project_dep.lua_code, &transaction_deps),
-                interval.tick()
-            );
-            if let Some(hash) = hash? {
-                println!("[Core] knside-out tansaction hash = {}", hash);
+            let hash = self.drive(&project_dep.lua_code, &transaction_deps).await?;
+            if let Some(hash) = hash {
+                println!(
+                    "[INFO] send knside-out tansaction({}), wait for committed...",
+                    hash
+                );
+                self.ko_driver
+                    .wait_ko_transaction_committed(&hash, &self.drive_interval)
+                    .await?;
+            } else {
+                tokio::time::sleep(self.drive_interval).await;
             }
         }
     }

@@ -1,7 +1,8 @@
+use std::time::Duration;
 use std::vec;
 
 use ckb_hash::new_blake2b;
-use ckb_jsonrpc_types::{OutputsValidator, TransactionView as JsonTxView};
+use ckb_jsonrpc_types::{OutputsValidator, Status, TransactionView as JsonTxView};
 use ko_protocol::ckb_sdk::SECP256K1;
 use ko_protocol::ckb_types::packed::{CellDep, OutPoint, WitnessArgs};
 use ko_protocol::ckb_types::prelude::{Builder, Entity, Pack};
@@ -9,7 +10,7 @@ use ko_protocol::ckb_types::{bytes::Bytes, core::TransactionView, H256};
 use ko_protocol::secp256k1::{Message, SecretKey};
 use ko_protocol::serde_json::to_string;
 use ko_protocol::traits::{CkbClient, Driver};
-use ko_protocol::{async_trait, types::config::KoCellDep, KoResult};
+use ko_protocol::{async_trait, tokio, types::config::KoCellDep, KoResult};
 
 mod error;
 use error::DriverError;
@@ -94,5 +95,50 @@ impl<C: CkbClient> Driver for DriverImpl<C> {
                 )
             })?;
         Ok(hash)
+    }
+
+    async fn wait_ko_transaction_committed(
+        &self,
+        hash: &H256,
+        interval: &Duration,
+    ) -> KoResult<()> {
+        let mut block_number = 0u64;
+        loop {
+            tokio::time::sleep(*interval).await;
+            let tx = self
+                .rpc_client
+                .get_transaction(hash)
+                .await
+                .map_err(|err| DriverError::TransactionFetchError(err.to_string(), hash.clone()))?
+                .unwrap();
+            if tx.tx_status.status == Status::Rejected {
+                return Err(DriverError::TransactionFetchError(
+                    tx.tx_status.reason.unwrap_or_else(|| "rejected".into()),
+                    hash.clone(),
+                )
+                .into());
+            }
+            if tx.tx_status.status != Status::Committed {
+                continue;
+            }
+            if block_number == 0 {
+                if let Some(block_hash) = tx.tx_status.block_hash {
+                    let block = self.rpc_client.get_block(&block_hash).await.unwrap();
+                    block_number = block.header.inner.number.into();
+                    println!(
+                        "[INFO] transaction commited in block #{}, wait for confirmed...",
+                        block_number
+                    );
+                }
+            } else {
+                let tip = self.rpc_client.get_tip_header().await.unwrap();
+                let tip_number: u64 = tip.inner.number.into();
+                if tip_number > block_number + 8 {
+                    println!("[INFO] transaction confirmed");
+                    break;
+                }
+            }
+        }
+        Ok(())
     }
 }

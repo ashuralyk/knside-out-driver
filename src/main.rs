@@ -58,10 +58,10 @@ async fn main() {
     let ctx = Context::new(assembler, executor, driver);
     tokio::select! {
         _ = ctrl_c_handler => {
-            println!("<Ctrl-C> is on the call, quit knside-out drive loop");
+            println!("<Ctrl-C> is on call, quit knside-out drive loop");
         },
         Err(error) = ctx.start(&config.project_cell_deps) => {
-            println!("[Error] {}", error);
+            println!("[ERROR] {}", error);
         }
     }
 }
