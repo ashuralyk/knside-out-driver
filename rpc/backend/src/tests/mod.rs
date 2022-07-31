@@ -20,14 +20,14 @@ const OWNER_PRIVATE_KEY: H256 =
 const OWNER_ADDRESS: &str = "ckt1qyqycu3e597mvx7qpdpf45jdpn5u27w574rq8stzv3";
 
 const PROJECT_CODE_HASH: H256 =
-    h256!("0x56a2ace407c9a1390896c2ddfd364c2eb56ce167a071206cf8c41f0fa5ed96a8");
+    h256!("0x0883e9527e2798d7bb3540b1186297464fdfb71bf59566971b0824c781aaa6c0");
 const PROJECT_TYPE_ARGS: H256 =
-    h256!("0x75c82f2165f1c6b90e2b6a5d33ce556f30daeaba3f855c0b81b2fa1f9fe0e4cd");
+    h256!("0xd6568eda1c20e30b41cd15be2f9ab8db9446561097ee801cafabdb6ca6133e05");
 
 const SECP256K1_TX_HASH: H256 =
     h256!("0x5c7b70f4fd242ff0fb703de908e2e7eef21621b640fe9a9c752643021a87bc1f");
 const KNSIDEOUT_TX_HASH: H256 =
-    h256!("0xd08a5e45937c8dbe850f1bad6bdb3a613c06ca6cad9743905f42a4396ada785f");
+    h256!("0xb88a68436c16dbdfbd5d3c3e38c5dcd4905514e0c8ead8e0b1b8533bc63d32e0");
 
 async fn sign_and_push(rpc_client: &impl CkbClient, tx: TransactionView) {
     // sign transaction
@@ -114,20 +114,24 @@ async fn request_project_request_cell() {
         KoCellDep::new(KNSIDEOUT_TX_HASH.clone(), 0, DepType::Code.into()),
     ];
 
-    // search previous personal cell
     let rpc_client = RpcClient::new(CKB_URL, CKB_INDEXER_URL);
     let mut backend = BackendImpl::new(&rpc_client);
-    let personal_data = backend
-        .search_personal_data(OWNER_ADDRESS.into(), &PROJECT_CODE_HASH, &PROJECT_TYPE_ARGS)
-        .await
-        .expect("search personal");
-    let previous_cell = {
-        if let Some((_, outpoint)) = personal_data.first() {
-            Some(outpoint.clone())
-        } else {
-            None
-        }
-    };
+    let mut previous_cell = None;
+    let function_call = "claim_nfts()".into();
+    if function_call == "claim_nfts" {
+        // search previous personal cell
+        let personal_data = backend
+            .search_personal_data(OWNER_ADDRESS.into(), &PROJECT_CODE_HASH, &PROJECT_TYPE_ARGS)
+            .await
+            .expect("search personal");
+        previous_cell = {
+            if let Some((_, outpoint)) = personal_data.first() {
+                Some(outpoint.clone())
+            } else {
+                None
+            }
+        };
+    }
     println!("previous = {:?}", previous_cell);
     // create digest
     let digest = backend
@@ -135,7 +139,7 @@ async fn request_project_request_cell() {
             OWNER_ADDRESS.into(),
             None,
             previous_cell,
-            "claim_nfts()".into(),
+            function_call,
             &PROJECT_CODE_HASH,
             &PROJECT_TYPE_ARGS,
             &cell_deps,
