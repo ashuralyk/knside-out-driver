@@ -79,10 +79,12 @@ async fn deploy_project_deployment_cell() {
     // sign and push transaction
     let tx = backend.peak_transaction(&digest).expect("peak");
     let signature = sign(&rpc_client, tx);
-    backend
+    let hash = backend
         .send_transaction_to_ckb(&digest, &signature)
         .await
-        .expect("send");
+        .expect("send")
+        .unwrap();
+    println!("send success, hash = {}", hash);
     // sign_and_push(&rpc_client, tx).await;
 }
 
@@ -110,10 +112,12 @@ async fn update_project_deployment_cell() {
     // sign and push transaction
     let tx = backend.peak_transaction(&digest).expect("peak");
     let signature = sign(&rpc_client, tx);
-    backend
+    let hash = backend
         .send_transaction_to_ckb(&digest, &signature)
         .await
-        .expect("send");
+        .expect("send")
+        .unwrap();
+    println!("send success, hash = {}", hash);
     // sign_and_push(&rpc_client, tx).await;
 }
 
@@ -127,7 +131,7 @@ async fn request_project_request_cell() {
     let rpc_client = RpcClient::new(CKB_URL, CKB_INDEXER_URL);
     let mut backend = BackendImpl::new(&rpc_client);
     let mut previous_cell = None;
-    let function_call = "claim_nfts()".into();
+    let function_call = "battle_win()".into();
     if function_call == "claim_nfts" {
         // search previous personal cell
         let personal_data = backend
@@ -160,10 +164,12 @@ async fn request_project_request_cell() {
     // sign and push transaction
     let tx = backend.peak_transaction(&digest).expect("peak");
     let signature = sign(&rpc_client, tx);
-    backend
+    let hash = backend
         .send_transaction_to_ckb(&digest, &signature)
         .await
-        .expect("send");
+        .expect("send")
+        .unwrap();
+    println!("send success, hash = {}", hash);
     // sign_and_push(&rpc_client, tx).await;
 }
 

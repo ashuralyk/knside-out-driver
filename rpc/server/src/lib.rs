@@ -29,7 +29,7 @@ impl RpcServerInternal {
         params: Params<'static>,
         ctx: Arc<Context<impl Backend>>,
     ) -> Result<KoMakeReqeustDigestResponse, Error> {
-        let request: KoMakeReqeustDigestParams = params.parse()?;
+        let request: KoMakeReqeustDigestParams = params.one()?;
         let digest = ctx
             .backend
             .lock()

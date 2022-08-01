@@ -17,7 +17,7 @@ async fn send_make_request_digest() {
         KoCellDep::new(SECP256K1_TX_HASH.clone(), 0, DepType::DepGroup.into()),
         KoCellDep::new(KNSIDEOUT_TX_HASH.clone(), 0, DepType::Code.into()),
     ];
-    RpcServer::new("0.0.0.0:8090")
+    let _handle = RpcServer::new("127.0.0.1:8090")
         .await
         .expect("build rpc server")
         .start(backend, &PROJECT_CODE_HASH, &PROJECT_TYPE_ARGS, &cell_deps)
@@ -26,8 +26,8 @@ async fn send_make_request_digest() {
 
     // send client request
     let client = HttpClientBuilder::default()
-        .build("127.0.0.1:8090")
-        .expect("client");
+        .build("http://127.0.0.1:8090")
+        .expect("start client");
     let params = KoMakeReqeustDigestParams {
         sender: OWNER_ADDRESS.into(),
         contract_call: "battle_win()".into(),
@@ -37,6 +37,6 @@ async fn send_make_request_digest() {
     let response: KoMakeReqeustDigestResponse = client
         .request("make_request_digest", rpc_params!(params))
         .await
-        .expect("response");
+        .expect("server response");
     println!("response = {:?}", response);
 }
