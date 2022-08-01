@@ -57,10 +57,17 @@ impl RpcServerInternal {
     }
 
     pub async fn fetch_global_data(
-        params: Params<'static>,
+        _params: Params<'static>,
         ctx: Arc<Context<impl Backend>>,
     ) -> Result<KoFetchGlobalDataResponse, Error> {
-        let response = KoFetchGlobalDataResponse::new("".into());
+        let json_data = ctx
+            .backend
+            .lock()
+            .await
+            .search_global_data(&ctx.project_code_hash, &ctx.project_type_args)
+            .await
+            .map_err(|err| Error::Custom(err.to_string()))?;
+        let response = KoFetchGlobalDataResponse::new(json_data);
         Ok(response)
     }
 
@@ -68,7 +75,22 @@ impl RpcServerInternal {
         params: Params<'static>,
         ctx: Arc<Context<impl Backend>>,
     ) -> Result<KoFetchPersonalDataResponse, Error> {
-        let response = KoFetchPersonalDataResponse::new(vec![]);
+        let address: KoFetchPersonalDataParams = params.one()?;
+        let user_data_list = ctx
+            .backend
+            .lock()
+            .await
+            .search_personal_data(
+                address.address,
+                &ctx.project_code_hash,
+                &ctx.project_type_args,
+            )
+            .await
+            .map_err(|err| Error::Custom(err.to_string()))?
+            .into_iter()
+            .map(|(data, cell)| KoPersonalData::new(data, cell))
+            .collect();
+        let response = KoFetchPersonalDataResponse::new(user_data_list);
         Ok(response)
     }
 }
