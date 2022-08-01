@@ -14,7 +14,7 @@ use crate::Context;
 #[tokio::test]
 async fn drive_one() {
     // prepare parts
-    let rpc_client = RpcClient::new(CKB_URL, &CKB_INDEXER_URL);
+    let rpc_client = RpcClient::new(CKB_URL, CKB_INDEXER_URL);
     let assembler = AssemblerImpl::new(&rpc_client, &PROJECT_TYPE_ARGS, &PROJECT_CODE_HASH);
     let privkey = SecretKey::from_slice(OWNER_PRIVATE_KEY.as_bytes()).unwrap();
     let driver = DriverImpl::new(&rpc_client, &privkey);

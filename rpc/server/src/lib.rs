@@ -1,96 +1,125 @@
 #![allow(unused_variables)]
 
+mod error;
+
 use std::net::SocketAddr;
 use std::sync::Arc;
 
-use jsonrpsee_core::Error;
-use jsonrpsee_http_server::{HttpServer, HttpServerBuilder, HttpServerHandle, RpcModule};
-use jsonrpsee_types::Params;
+use async_trait::async_trait;
+use jsonrpsee::http_server::{HttpServerBuilder, HttpServerHandle};
+use jsonrpsee::{core::Error, proc_macros::rpc, types::error::CallError};
 use ko_protocol::ckb_types::H256;
 use ko_protocol::tokio::sync::Mutex;
 use ko_protocol::traits::Backend;
 use ko_protocol::types::config::KoCellDep;
+use ko_protocol::types::hex::Hex;
 use ko_protocol::{hex, types::server::*, KoResult};
 
-mod error;
-use error::RpcServerError;
+use crate::error::RpcServerError;
 
-macro_rules! register_async {
-    ($module:expr, $name:ident) => {
-        $module
-            .register_async_method(stringify!($name), RpcServerInternal::$name)
-            .map_err(|err| RpcServerError::ErrorRegisterRpcMethod(err.to_string()))?;
-    };
+type RpcResult<T> = Result<T, Error>;
+
+#[rpc(server)]
+pub trait KnsideRpc {
+    #[method(name = "make_request_digest")]
+    async fn make_request_digest(&self, payload: KoMakeRequestDigestParams) -> RpcResult<String>;
+
+    #[method(name = "send_digest_signature")]
+    async fn send_digest_signature(&self, payload: KoSendDigestSignatureParams) -> RpcResult<H256>;
+
+    #[method(name = "fetch_global_data")]
+    async fn fetch_global_data(&self) -> RpcResult<Hex>;
+
+    #[method(name = "fetch_personal_data")]
+    async fn fetch_personal_data(&self, address: String) -> RpcResult<KoFetchPersonalDataResponse>;
 }
 
-struct RpcServerInternal {}
+pub struct RpcServer<B: Backend + 'static> {
+    ctx: Arc<Context<B>>,
+}
 
 // define all of rpc methods here
-impl RpcServerInternal {
-    pub async fn make_request_digest(
-        params: Params<'static>,
-        ctx: Arc<Context<impl Backend>>,
-    ) -> Result<KoMakeReqeustDigestResponse, Error> {
-        let request: KoMakeReqeustDigestParams = params.one()?;
-        let digest = ctx
+#[async_trait]
+impl<B: Backend + 'static> KnsideRpcServer for RpcServer<B> {
+    async fn make_request_digest(&self, payload: KoMakeRequestDigestParams) -> RpcResult<String> {
+        let digest = self
+            .ctx
             .backend
             .lock()
             .await
             .create_project_request_digest(
-                request.sender,
-                request.recipient,
-                request.previous_cell.map(|v| v.into()),
-                request.contract_call,
-                &ctx.project_code_hash,
-                &ctx.project_type_args,
-                &ctx.project_cell_deps,
+                payload.sender,
+                payload.recipient,
+                payload.previous_cell.map(|v| v.into()),
+                payload.contract_call,
+                &self.ctx.project_code_hash,
+                &self.ctx.project_type_args,
+                &self.ctx.project_cell_deps,
             )
             .await
             .map_err(|err| Error::Custom(err.to_string()))?;
-        Ok(KoMakeReqeustDigestResponse::new(hex::encode(digest)))
+
+        Ok(hex::encode(digest))
     }
 
-    pub async fn send_digest_signature(
-        params: Params<'static>,
-        ctx: Arc<Context<impl Backend>>,
-    ) -> Result<KoSendDigestSignatureResponse, Error> {
-        let response = KoSendDigestSignatureResponse::new("".into());
-        Ok(response)
-    }
+    async fn send_digest_signature(&self, payload: KoSendDigestSignatureParams) -> RpcResult<H256> {
+        let mut sig = [0u8; 65];
+        let payload_signature = payload.signature.as_bytes();
 
-    pub async fn fetch_global_data(
-        params: Params<'static>,
-        ctx: Arc<Context<impl Backend>>,
-    ) -> Result<KoFetchGlobalDataResponse, Error> {
-        let response = KoFetchGlobalDataResponse::new("".into());
-        Ok(response)
-    }
+        if payload_signature.len() != 65 {
+            return Err(Error::Call(CallError::InvalidParams(
+                RpcServerError::InvalidSignatureLen(payload_signature.len()).into(),
+            )));
+        }
 
-    pub async fn fetch_personal_data(
-        params: Params<'static>,
-        ctx: Arc<Context<impl Backend>>,
-    ) -> Result<KoFetchPersonalDataResponse, Error> {
-        let response = KoFetchPersonalDataResponse::new(vec![]);
-        Ok(response)
-    }
-}
+        sig.copy_from_slice(&payload_signature);
 
-pub struct RpcServer {
-    rpc_server: HttpServer,
-}
-
-impl RpcServer {
-    pub async fn new(url: &str) -> KoResult<Self> {
-        let server = HttpServerBuilder::default()
-            .build(url.parse::<SocketAddr>().unwrap())
+        self.ctx
+            .backend
+            .lock()
             .await
-            .map_err(|err| RpcServerError::ErorrBuildRpcServer(err.to_string()))?;
-        let server = RpcServer { rpc_server: server };
-        Ok(server)
+            .send_transaction_to_ckb(&payload.digest, &sig)
+            .await
+            .map_err(|err| Error::Custom(err.to_string()))?
+            .ok_or_else(|| Error::Custom(RpcServerError::SendSignature.to_string()))
     }
 
+    async fn fetch_global_data(&self) -> RpcResult<Hex> {
+        let project_code_hash = self.ctx.project_code_hash.clone();
+        let project_type_args = self.ctx.project_type_args.clone();
+        let data = self
+            .ctx
+            .backend
+            .lock()
+            .await
+            .search_global_data(&project_code_hash, &project_type_args)
+            .await
+            .map_err(|err| Error::Custom(err.to_string()))?;
+        Ok(Hex::encode(data))
+    }
+
+    async fn fetch_personal_data(&self, address: String) -> RpcResult<KoFetchPersonalDataResponse> {
+        let project_code_hash = self.ctx.project_code_hash.clone();
+        let project_type_args = self.ctx.project_type_args.clone();
+
+        Ok(KoFetchPersonalDataResponse::new(
+            self.ctx
+                .backend
+                .lock()
+                .await
+                .search_personal_data(address, &project_code_hash, &project_type_args)
+                .await
+                .map_err(|err| Error::Custom(err.to_string()))?
+                .into_iter()
+                .map(|item| KoPersonalData::new(Hex::encode(&item.0), item.1.into()))
+                .collect(),
+        ))
+    }
+}
+
+impl<B: Backend + 'static> RpcServer<B> {
     pub async fn start(
-        self,
+        url: &str,
         backend: impl Backend + 'static,
         project_code_hash: &H256,
         project_type_args: &H256,
@@ -102,16 +131,17 @@ impl RpcServer {
             project_cell_deps.to_owned(),
             Mutex::new(backend),
         );
-        let mut module = RpcModule::new(context);
-        // register jsonrpc methods
-        register_async!(module, make_request_digest);
-        register_async!(module, send_digest_signature);
-        register_async!(module, fetch_global_data);
-        register_async!(module, fetch_personal_data);
+        let rpc_impl = RpcServer {
+            ctx: Arc::new(context),
+        };
+
         // start jsonrpc server
-        let handle = self
-            .rpc_server
-            .start(module)
+        let server = HttpServerBuilder::default()
+            .build(url.parse::<SocketAddr>().unwrap())
+            .await
+            .map_err(|err| RpcServerError::ErrorBuildRpcServer(err.to_string()))?;
+        let handle = server
+            .start(rpc_impl.into_rpc())
             .map_err(|err| RpcServerError::ErrorStartRpcServer(err.to_string()))?;
         Ok(handle)
     }

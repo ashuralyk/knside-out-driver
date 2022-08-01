@@ -11,6 +11,7 @@ pub enum ErrorType {
     Requester,
     CkbClient,
     RpcServer,
+    Hex,
 }
 
 #[derive(Debug, Constructor, Display)]

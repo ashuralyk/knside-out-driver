@@ -4,48 +4,26 @@ use derive_more::Constructor;
 use serde::{Deserialize, Serialize};
 use tokio::sync::Mutex;
 
-use crate::{traits::Backend, types::config::KoCellDep};
+use crate::traits::Backend;
+use crate::types::{config::KoCellDep, hex::Hex};
 
 #[derive(Deserialize, Serialize)]
-pub struct KoMakeReqeustDigestParams {
+pub struct KoMakeRequestDigestParams {
     pub sender: String,
     pub contract_call: String,
     pub recipient: Option<String>,
     pub previous_cell: Option<OutPoint>,
 }
 
-#[derive(Serialize, Deserialize, Constructor, Debug)]
-pub struct KoMakeReqeustDigestResponse {
-    pub digest: String,
-}
-
 #[derive(Deserialize, Serialize)]
 pub struct KoSendDigestSignatureParams {
-    pub digest: String,
-    pub signature: String,
-}
-
-#[derive(Serialize, Deserialize, Constructor, Debug)]
-pub struct KoSendDigestSignatureResponse {
-    pub hash: String,
-}
-
-#[derive(Deserialize, Serialize)]
-pub struct KoFetchGlobalDataParams {}
-
-#[derive(Serialize, Constructor, Debug)]
-pub struct KoFetchGlobalDataResponse {
-    pub data: String,
-}
-
-#[derive(Deserialize, Serialize)]
-pub struct KoFetchPersonalDataParams {
-    pub address: String,
+    pub digest: H256,
+    pub signature: Hex,
 }
 
 #[derive(Serialize, Deserialize, Constructor, Debug)]
 pub struct KoPersonalData {
-    pub data: String,
+    pub data: Hex,
     pub outpoint: OutPoint,
 }
 

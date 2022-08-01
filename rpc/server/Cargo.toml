@@ -6,8 +6,10 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-jsonrpsee-http-server = "0.15"
-jsonrpsee-types = "0.15"
-jsonrpsee-core = "0.15"
+async-trait = "0.1"
+ckb-jsonrpc-types = "0.104"
+ckb-types = "0.104"
+jsonrpsee = { version = "0.15", features = ["http-server", "macros", "ws-server"] }
+serde = { version = "1.0", features = ["derive"] }
 
 ko-protocol = { path = "../../protocol" }
