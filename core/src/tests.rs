@@ -3,29 +3,13 @@ use ko_core_driver::DriverImpl;
 use ko_core_executor::ExecutorImpl;
 use ko_protocol::ckb_types::packed::{CellDep, OutPoint};
 use ko_protocol::ckb_types::prelude::{Builder, Entity, Pack};
-use ko_protocol::ckb_types::{core::DepType, h256, H256};
+use ko_protocol::ckb_types::{core::DepType, H256};
 use ko_protocol::secp256k1::SecretKey;
-use ko_protocol::tokio;
 use ko_protocol::traits::Assembler;
+use ko_protocol::{hex, tokio, TestVars::*};
 use ko_rpc_client::RpcClient;
 
 use crate::Context;
-
-const CKB_URL: &str = "http://127.0.0.1:8114";
-const CKB_INDEXER_URL: &str = "http://127.0.0.1:8116";
-
-const OWNER_PRIVATE_KEY: H256 =
-    h256!("0x9a8fc5c463841c152800ec45ef4ceb03586177a7e6a9f34a6e40256310325e43");
-
-const PROJECT_CODE_HASH: H256 =
-    h256!("0x0883e9527e2798d7bb3540b1186297464fdfb71bf59566971b0824c781aaa6c0");
-const PROJECT_TYPE_ARGS: H256 =
-    h256!("0xd6568eda1c20e30b41cd15be2f9ab8db9446561097ee801cafabdb6ca6133e05");
-
-const SECP256K1_TX_HASH: H256 =
-    h256!("0x5c7b70f4fd242ff0fb703de908e2e7eef21621b640fe9a9c752643021a87bc1f");
-const KNSIDEOUT_TX_HASH: H256 =
-    h256!("0xb88a68436c16dbdfbd5d3c3e38c5dcd4905514e0c8ead8e0b1b8533bc63d32e0");
 
 #[tokio::test]
 async fn drive_one() {

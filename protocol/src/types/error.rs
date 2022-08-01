@@ -10,6 +10,7 @@ pub enum ErrorType {
     Deployer,
     Requester,
     CkbClient,
+    RpcServer,
 }
 
 #[derive(Debug, Constructor, Display)]

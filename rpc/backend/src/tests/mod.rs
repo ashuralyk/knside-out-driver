@@ -1,36 +1,36 @@
 use ko_core_driver::DriverImpl;
 use ko_protocol::ckb_jsonrpc_types::TransactionView as JsonTxView;
+use ko_protocol::ckb_types::bytes::Bytes;
 use ko_protocol::ckb_types::core::{DepType, TransactionView};
 use ko_protocol::ckb_types::packed::WitnessArgs;
 use ko_protocol::ckb_types::prelude::{Builder, Entity, Pack};
-use ko_protocol::ckb_types::{bytes::Bytes, h256, H256};
 use ko_protocol::secp256k1::SecretKey;
 use ko_protocol::traits::{Backend, CkbClient, Driver};
 use ko_protocol::types::config::KoCellDep;
-use ko_protocol::{serde_json, tokio};
+use ko_protocol::{serde_json, tokio, TestVars::*};
 use ko_rpc_client::RpcClient;
 
 use crate::BackendImpl;
 
-const CKB_URL: &str = "http://127.0.0.1:8114";
-const CKB_INDEXER_URL: &str = "http://127.0.0.1:8116";
-
-const OWNER_PRIVATE_KEY: H256 =
-    h256!("0x9a8fc5c463841c152800ec45ef4ceb03586177a7e6a9f34a6e40256310325e43");
-const OWNER_ADDRESS: &str = "ckt1qyqycu3e597mvx7qpdpf45jdpn5u27w574rq8stzv3";
-
-const PROJECT_CODE_HASH: H256 =
-    h256!("0x0883e9527e2798d7bb3540b1186297464fdfb71bf59566971b0824c781aaa6c0");
-const PROJECT_TYPE_ARGS: H256 =
-    h256!("0xd6568eda1c20e30b41cd15be2f9ab8db9446561097ee801cafabdb6ca6133e05");
-
-const SECP256K1_TX_HASH: H256 =
-    h256!("0x5c7b70f4fd242ff0fb703de908e2e7eef21621b640fe9a9c752643021a87bc1f");
-const KNSIDEOUT_TX_HASH: H256 =
-    h256!("0xb88a68436c16dbdfbd5d3c3e38c5dcd4905514e0c8ead8e0b1b8533bc63d32e0");
-
-async fn sign_and_push(rpc_client: &impl CkbClient, tx: TransactionView) {
+fn sign(rpc_client: &impl CkbClient, tx: TransactionView) -> [u8; 65] {
+    println!(
+        "tx = {}",
+        serde_json::to_string_pretty(&JsonTxView::from(tx.clone())).unwrap()
+    );
     // sign transaction
+    let privkey = SecretKey::from_slice(OWNER_PRIVATE_KEY.as_bytes()).unwrap();
+    let driver = DriverImpl::new(rpc_client, &privkey);
+    let signature = {
+        let mut bytes = [0u8; 65];
+        let signature = driver.sign_ko_transaction(&tx);
+        bytes.copy_from_slice(&signature);
+        bytes
+    };
+    signature
+}
+
+#[allow(unused)]
+async fn sign_and_push(rpc_client: &impl CkbClient, tx: TransactionView) {
     let privkey = SecretKey::from_slice(OWNER_PRIVATE_KEY.as_bytes()).unwrap();
     let driver = DriverImpl::new(rpc_client, &privkey);
     let signature = driver.sign_ko_transaction(&tx);
@@ -77,8 +77,13 @@ async fn deploy_project_deployment_cell() {
     println!("project_type_args = {}", type_args);
 
     // sign and push transaction
-    let tx = backend.pop_transaction(&digest).await.expect("pop");
-    sign_and_push(&rpc_client, tx).await;
+    let tx = backend.peak_transaction(&digest).expect("peak");
+    let signature = sign(&rpc_client, tx);
+    backend
+        .send_transaction_to_ckb(&digest, &signature)
+        .await
+        .expect("send");
+    // sign_and_push(&rpc_client, tx).await;
 }
 
 #[tokio::test]
@@ -103,8 +108,13 @@ async fn update_project_deployment_cell() {
         .expect("create digest");
 
     // sign and push transaction
-    let tx = backend.pop_transaction(&digest).await.expect("pop");
-    sign_and_push(&rpc_client, tx).await;
+    let tx = backend.peak_transaction(&digest).expect("peak");
+    let signature = sign(&rpc_client, tx);
+    backend
+        .send_transaction_to_ckb(&digest, &signature)
+        .await
+        .expect("send");
+    // sign_and_push(&rpc_client, tx).await;
 }
 
 #[tokio::test]
@@ -148,8 +158,13 @@ async fn request_project_request_cell() {
         .expect("create digest");
 
     // sign and push transaction
-    let tx = backend.pop_transaction(&digest).await.expect("pop");
-    sign_and_push(&rpc_client, tx).await;
+    let tx = backend.peak_transaction(&digest).expect("peak");
+    let signature = sign(&rpc_client, tx);
+    backend
+        .send_transaction_to_ckb(&digest, &signature)
+        .await
+        .expect("send");
+    // sign_and_push(&rpc_client, tx).await;
 }
 
 #[tokio::test]

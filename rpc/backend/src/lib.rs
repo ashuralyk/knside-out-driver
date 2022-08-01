@@ -1,6 +1,7 @@
 use std::collections::HashMap;
 use std::str::FromStr;
 
+use ko_protocol::ckb_jsonrpc_types::{OutputsValidator, TransactionView as JsonTxView};
 use ko_protocol::ckb_sdk::rpc::ckb_indexer::{ScriptType, SearchKey, SearchKeyFilter};
 use ko_protocol::ckb_sdk::Address;
 use ko_protocol::ckb_types::core::{Capacity, TransactionBuilder, TransactionView};
@@ -9,7 +10,7 @@ use ko_protocol::ckb_types::packed::{
 };
 use ko_protocol::ckb_types::prelude::{Builder, Entity, Pack, Unpack};
 use ko_protocol::ckb_types::{bytes::Bytes, H256};
-use ko_protocol::tokio::sync::Mutex;
+use ko_protocol::serde_json::to_string;
 use ko_protocol::traits::{Backend, CkbClient};
 use ko_protocol::types::config::KoCellDep;
 use ko_protocol::types::generated::{mol_deployment, mol_flag_0};
@@ -24,15 +25,19 @@ use error::BackendError;
 
 pub struct BackendImpl<C: CkbClient> {
     rpc_client: C,
-    cached_transactions: Mutex<HashMap<H256, TransactionView>>,
+    cached_transactions: HashMap<H256, TransactionView>,
 }
 
 impl<C: CkbClient> BackendImpl<C> {
     pub fn new(rpc_client: &C) -> Self {
         BackendImpl {
             rpc_client: rpc_client.clone(),
-            cached_transactions: Mutex::new(HashMap::new()),
+            cached_transactions: HashMap::new(),
         }
+    }
+
+    pub fn peak_transaction(&self, digest: &H256) -> Option<TransactionView> {
+        self.cached_transactions.get(digest).cloned()
     }
 }
 
@@ -145,8 +150,7 @@ impl<C: CkbClient> Backend for BackendImpl<C> {
 
         // generate transaction digest
         let digest = helper::get_transaction_digest(&tx);
-        let mut cache = self.cached_transactions.lock().await;
-        cache.insert(digest.clone(), tx);
+        self.cached_transactions.insert(digest.clone(), tx);
 
         // generate project type_id args
         Ok((digest, project_type_args))
@@ -245,8 +249,7 @@ impl<C: CkbClient> Backend for BackendImpl<C> {
 
         // generate transaction digest
         let digest = helper::get_transaction_digest(&tx);
-        let mut cache = self.cached_transactions.lock().await;
-        cache.insert(digest.clone(), tx);
+        self.cached_transactions.insert(digest.clone(), tx);
 
         Ok(digest)
     }
@@ -372,15 +375,33 @@ impl<C: CkbClient> Backend for BackendImpl<C> {
 
         // generate transaction digest
         let digest = helper::get_transaction_digest(&tx);
-        let mut cache = self.cached_transactions.lock().await;
-        cache.insert(digest.clone(), tx);
+        self.cached_transactions.insert(digest.clone(), tx);
 
         Ok(digest)
     }
 
-    async fn pop_transaction(&mut self, digest: &H256) -> Option<TransactionView> {
-        let mut cache = self.cached_transactions.lock().await;
-        cache.remove(digest)
+    async fn send_transaction_to_ckb(
+        &mut self,
+        digest: &H256,
+        signature: &[u8; 65],
+    ) -> KoResult<Option<H256>> {
+        let tx = self.cached_transactions.remove(digest);
+        if let Some(tx) = tx {
+            let tx = helper::complete_transaction_with_signature(tx, signature);
+            let hash = self
+                .rpc_client
+                .send_transaction(&tx.data().into(), Some(OutputsValidator::Passthrough))
+                .await
+                .map_err(|err| {
+                    BackendError::TransactionSendError(
+                        err.to_string(),
+                        to_string(&JsonTxView::from(tx)).unwrap(),
+                    )
+                })?;
+            Ok(Some(hash))
+        } else {
+            Ok(None)
+        }
     }
 
     async fn search_global_data(

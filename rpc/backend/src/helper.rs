@@ -125,3 +125,16 @@ pub fn calc_outputs_capacity(outputs: &[CellOutput], fee: &str) -> u64 {
     outputs_capacity += fee.0;
     outputs_capacity
 }
+
+pub fn complete_transaction_with_signature(
+    tx: TransactionView,
+    signature: &[u8; 65],
+) -> TransactionView {
+    let witness = WitnessArgs::new_builder()
+        .lock(Some(Bytes::from(signature.to_vec())).pack())
+        .build()
+        .as_bytes();
+    tx.as_advanced_builder()
+        .witnesses(vec![witness].pack())
+        .build()
+}

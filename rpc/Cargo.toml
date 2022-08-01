@@ -8,3 +8,10 @@ edition = "2021"
 [dependencies]
 ko-protocol = { path = "../protocol" }
 ko-rpc-backend = { path = "./backend" }
+ko-rpc-server = { path = "./server" }
+
+[dev-dependencies]
+jsonrpsee-core = "0.15"
+jsonrpsee-http-client = "0.15"
+
+ko-rpc-client = { path = "./client" }

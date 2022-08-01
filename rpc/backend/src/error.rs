@@ -39,6 +39,9 @@ pub enum BackendError {
 
     #[display(fmt = "Personal data is not UTF-8 format, type_args = {}", _0)]
     InvalidPersonalDataFormat(H256),
+
+    #[display(fmt = "Rpc send_transaction error: {}, tx = {}", _0, _1)]
+    TransactionSendError(String, String),
 }
 
 impl std::error::Error for BackendError {}

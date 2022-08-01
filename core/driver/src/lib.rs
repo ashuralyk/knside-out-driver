@@ -2,7 +2,7 @@ use std::time::Duration;
 use std::vec;
 
 use ckb_hash::new_blake2b;
-use ckb_jsonrpc_types::{OutputsValidator, Status, TransactionView as JsonTxView};
+use ko_protocol::ckb_jsonrpc_types::{OutputsValidator, Status, TransactionView as JsonTxView};
 use ko_protocol::ckb_sdk::SECP256K1;
 use ko_protocol::ckb_types::packed::{CellDep, OutPoint, WitnessArgs};
 use ko_protocol::ckb_types::prelude::{Builder, Entity, Pack};

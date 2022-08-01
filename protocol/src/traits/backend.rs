@@ -1,9 +1,9 @@
 use crate::types::config::KoCellDep;
 use crate::{async_trait, KoResult};
-use ckb_types::{bytes::Bytes, core::TransactionView, packed::OutPoint, H256};
+use ckb_types::{bytes::Bytes, packed::OutPoint, H256};
 
 #[async_trait]
-pub trait Backend {
+pub trait Backend: Send + Sync {
     async fn create_project_deploy_digest(
         &mut self,
         contract: Bytes,
@@ -32,7 +32,11 @@ pub trait Backend {
         project_cell_deps: &[KoCellDep],
     ) -> KoResult<H256>;
 
-    async fn pop_transaction(&mut self, digest: &H256) -> Option<TransactionView>;
+    async fn send_transaction_to_ckb(
+        &mut self,
+        digest: &H256,
+        signature: &[u8; 65],
+    ) -> KoResult<Option<H256>>;
 
     async fn search_global_data(
         &self,

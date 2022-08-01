@@ -1,7 +1,7 @@
 use ko_protocol::ckb_types::bytes::Bytes;
 use ko_protocol::ckb_types::packed::Script;
 use ko_protocol::types::assembler::KoRequest;
-use ko_protocol::{serde_json, KoResult};
+use ko_protocol::{hex, serde_json, KoResult};
 use mlua::{Lua, LuaSerdeExt, Table, Value};
 
 use crate::error::ExecutorError;

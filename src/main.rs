@@ -54,7 +54,7 @@ async fn main() {
         }
     });
 
-    // running context
+    // run context, will stop when any type of error throwed out
     let ctx = Context::new(assembler, executor, driver);
     tokio::select! {
         _ = ctrl_c_handler => {

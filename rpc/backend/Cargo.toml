@@ -7,7 +7,6 @@ edition = "2021"
 
 [dependencies]
 ckb-hash = "0.101"
-hex = "0.4"
 mlua = { version = "0.8", features = ["lua54", "serialize", "vendored"] }
 
 ko-protocol = { path = "../../protocol" }

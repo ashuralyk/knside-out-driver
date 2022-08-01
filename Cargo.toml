@@ -29,4 +29,5 @@ members = [
     "rpc",
     "rpc/backend",
     "rpc/client",
+    "rpc/server",
 ]

@@ -7,7 +7,7 @@ use ko_protocol::ckb_types::H256;
 use ko_protocol::derive_more::Constructor;
 use ko_protocol::traits::Executor;
 use ko_protocol::types::{assembler::KoRequest, executor::KoExecuteReceipt};
-use ko_protocol::{serde_json, KoResult};
+use ko_protocol::{hex, serde_json, KoResult};
 use mlua::{Lua, LuaSerdeExt, Table};
 
 mod error;
