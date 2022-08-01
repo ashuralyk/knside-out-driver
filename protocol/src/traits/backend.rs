@@ -1,7 +1,10 @@
 use crate::types::config::KoCellDep;
 use crate::{async_trait, KoResult};
 use ckb_types::{bytes::Bytes, packed::OutPoint, H256};
+use mockall::automock;
 
+#[cfg(feature = "mock")]
+#[automock]
 #[async_trait]
 pub trait Backend: Send + Sync {
     async fn create_project_deploy_digest(

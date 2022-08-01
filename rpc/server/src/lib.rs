@@ -52,8 +52,30 @@ impl RpcServerInternal {
         params: Params<'static>,
         ctx: Arc<Context<impl Backend>>,
     ) -> Result<KoSendDigestSignatureResponse, Error> {
-        let response = KoSendDigestSignatureResponse::new("".into());
-        Ok(response)
+        let request: KoSendDigestSignatureParams = params.one()?;
+
+        let digest = {
+            let mut buf = [0u8; 32];
+            hex::decode_to_slice(request.digest.trim_start_matches("0x"), &mut buf)
+                .map_err(|err| Error::Custom(err.to_string()))?;
+            H256::from(buf)
+        };
+        let signature = {
+            let mut buf = [0u8; 65];
+            hex::decode_to_slice(request.signature.trim_start_matches("0x"), &mut buf)
+                .map_err(|err| Error::Custom(err.to_string()))?;
+            buf
+        };
+
+        let maybe_ok = {
+            let mut backend = ctx.backend.lock().await;
+            backend.send_transaction_to_ckb(&digest, &signature).await
+        };
+        match maybe_ok {
+            Ok(Some(tx_hash)) => Ok(KoSendDigestSignatureResponse::new(hex::encode(tx_hash))),
+            Ok(None) => Err(Error::Custom("digest transaction not found".to_string())),
+            Err(err) => Err(Error::Custom(err.to_string())),
+        }
     }
 
     pub async fn fetch_global_data(

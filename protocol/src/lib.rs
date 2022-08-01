@@ -8,6 +8,8 @@ pub use ckb_types;
 pub use derive_more;
 pub use hex;
 pub use lazy_static::lazy_static;
+#[cfg(feature = "mock")]
+pub use mockall;
 pub use secp256k1;
 pub use serde_json;
 pub use tokio;

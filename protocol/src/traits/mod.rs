@@ -9,3 +9,6 @@ pub use backend::Backend;
 pub use client::{CkbClient, RPC};
 pub use driver::Driver;
 pub use executor::Executor;
+
+#[cfg(feature = "mock")]
+pub use backend::MockBackend;
