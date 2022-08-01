@@ -1,3 +1,5 @@
+#![allow(unused_variables)]
+
 use std::net::SocketAddr;
 use std::sync::Arc;
 

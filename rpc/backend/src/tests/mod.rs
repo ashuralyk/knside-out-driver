@@ -20,13 +20,13 @@ fn sign(rpc_client: &impl CkbClient, tx: TransactionView) -> [u8; 65] {
     // sign transaction
     let privkey = SecretKey::from_slice(OWNER_PRIVATE_KEY.as_bytes()).unwrap();
     let driver = DriverImpl::new(rpc_client, &privkey);
-    let signature = {
+
+    {
         let mut bytes = [0u8; 65];
         let signature = driver.sign_ko_transaction(&tx);
         bytes.copy_from_slice(&signature);
         bytes
-    };
-    signature
+    }
 }
 
 #[allow(unused)]

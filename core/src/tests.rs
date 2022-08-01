@@ -1,9 +1,9 @@
 use ko_core_assembler::AssemblerImpl;
 use ko_core_driver::DriverImpl;
 use ko_core_executor::ExecutorImpl;
+use ko_protocol::ckb_types::core::DepType;
 use ko_protocol::ckb_types::packed::{CellDep, OutPoint};
 use ko_protocol::ckb_types::prelude::{Builder, Entity, Pack};
-use ko_protocol::ckb_types::{core::DepType, H256};
 use ko_protocol::secp256k1::SecretKey;
 use ko_protocol::traits::Assembler;
 use ko_protocol::{hex, tokio, TestVars::*};
@@ -14,7 +14,7 @@ use crate::Context;
 #[tokio::test]
 async fn drive_one() {
     // prepare parts
-    let rpc_client = RpcClient::new(&CKB_URL, &CKB_INDEXER_URL);
+    let rpc_client = RpcClient::new(CKB_URL, &CKB_INDEXER_URL);
     let assembler = AssemblerImpl::new(&rpc_client, &PROJECT_TYPE_ARGS, &PROJECT_CODE_HASH);
     let privkey = SecretKey::from_slice(OWNER_PRIVATE_KEY.as_bytes()).unwrap();
     let driver = DriverImpl::new(&rpc_client, &privkey);
@@ -45,5 +45,5 @@ async fn drive_one() {
         .drive(&project_dep.lua_code, &transaction_deps)
         .await
         .expect("drive");
-    println!("hash = {}", hex::encode(&hash.unwrap_or(H256::default())));
+    println!("hash = {}", hex::encode(&hash.unwrap_or_default()));
 }
