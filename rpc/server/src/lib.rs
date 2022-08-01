@@ -85,29 +85,28 @@ impl<B: Backend + 'static> KnsideRpcServer for RpcServer<B> {
     }
 
     async fn fetch_global_data(&self) -> RpcResult<Hex> {
-        let project_code_hash = self.ctx.project_code_hash.clone();
-        let project_type_args = self.ctx.project_type_args.clone();
-        let data = self
-            .ctx
-            .backend
-            .lock()
-            .await
-            .search_global_data(&project_code_hash, &project_type_args)
-            .await
-            .map_err(|err| Error::Custom(err.to_string()))?;
-        Ok(Hex::encode(data))
+        Ok(Hex::encode(
+            self.ctx
+                .backend
+                .lock()
+                .await
+                .search_global_data(&self.ctx.project_code_hash, &self.ctx.project_type_args)
+                .await
+                .map_err(|err| Error::Custom(err.to_string()))?,
+        ))
     }
 
     async fn fetch_personal_data(&self, address: String) -> RpcResult<KoFetchPersonalDataResponse> {
-        let project_code_hash = self.ctx.project_code_hash.clone();
-        let project_type_args = self.ctx.project_type_args.clone();
-
         Ok(KoFetchPersonalDataResponse::new(
             self.ctx
                 .backend
                 .lock()
                 .await
-                .search_personal_data(address, &project_code_hash, &project_type_args)
+                .search_personal_data(
+                    address,
+                    &self.ctx.project_code_hash,
+                    &self.ctx.project_type_args,
+                )
                 .await
                 .map_err(|err| Error::Custom(err.to_string()))?
                 .into_iter()
