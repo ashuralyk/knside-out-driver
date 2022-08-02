@@ -7,7 +7,7 @@ use tokio::sync::Mutex;
 use crate::{traits::Backend, types::config::KoCellDep};
 
 #[derive(Deserialize, Serialize)]
-pub struct KoMakeReqeustDigestParams {
+pub struct KoMakeRequestDigestParams {
     pub sender: String,
     pub contract_call: String,
     pub private_key: String,
@@ -15,33 +15,10 @@ pub struct KoMakeReqeustDigestParams {
     pub previous_cell: Option<OutPoint>,
 }
 
-#[derive(Serialize, Deserialize, Constructor, Debug)]
-pub struct KoMakeReqeustDigestResponse {
-    pub digest: String,
-}
-
 #[derive(Deserialize, Serialize)]
 pub struct KoSendDigestSignatureParams {
     pub digest: String,
     pub signature: String,
-}
-
-#[derive(Serialize, Deserialize, Constructor, Debug)]
-pub struct KoSendDigestSignatureResponse {
-    pub hash: String,
-}
-
-#[derive(Deserialize, Serialize)]
-pub struct KoFetchGlobalDataParams {}
-
-#[derive(Serialize, Constructor, Debug)]
-pub struct KoFetchGlobalDataResponse {
-    pub data: String,
-}
-
-#[derive(Deserialize, Serialize)]
-pub struct KoFetchPersonalDataParams {
-    pub address: String,
 }
 
 #[derive(Serialize, Deserialize, Constructor, Debug)]
