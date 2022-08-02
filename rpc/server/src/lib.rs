@@ -30,10 +30,8 @@ impl RpcServerInternal {
         ctx: Arc<Context<impl Backend>>,
     ) -> Result<KoMakeReqeustDigestResponse, Error> {
         let request: KoMakeReqeustDigestParams = params.one()?;
-        let digest = ctx
-            .backend
-            .lock()
-            .await
+        let mut backend = ctx.backend.lock().await;
+        let digest = backend
             .create_project_request_digest(
                 request.sender,
                 request.recipient,
@@ -45,7 +43,16 @@ impl RpcServerInternal {
             )
             .await
             .map_err(|err| Error::Custom(err.to_string()))?;
-        Ok(KoMakeReqeustDigestResponse::new(hex::encode(digest)))
+        let privkey = hex::decode(request.private_key).unwrap();
+        let signature = backend
+            .sign_transaction(&digest, &privkey)
+            .await
+            .unwrap();
+        let hash = backend
+            .send_transaction_to_ckb(&digest, &signature)
+            .await
+            .unwrap();
+        Ok(KoMakeReqeustDigestResponse::new(hex::encode(hash.unwrap())))
     }
 
     pub async fn send_digest_signature(

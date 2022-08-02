@@ -38,6 +38,12 @@ pub trait Backend: Send + Sync {
         signature: &[u8; 65],
     ) -> KoResult<Option<H256>>;
 
+    async fn sign_transaction(
+        &self,
+        digest: &H256,
+        privkey: &[u8]
+    ) -> KoResult<[u8; 65]>;
+
     async fn search_global_data(
         &self,
         project_code_hash: &H256,

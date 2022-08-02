@@ -15,6 +15,8 @@ use ko_protocol::traits::{Backend, CkbClient};
 use ko_protocol::types::config::KoCellDep;
 use ko_protocol::types::generated::{mol_deployment, mol_flag_0};
 use ko_protocol::{async_trait, mol_flag_1, mol_flag_2, KoResult};
+use ko_protocol::ckb_sdk::SECP256K1;
+use ko_protocol::secp256k1::{Message, SecretKey};
 
 #[cfg(test)]
 mod tests;
@@ -402,6 +404,25 @@ impl<C: CkbClient> Backend for BackendImpl<C> {
         } else {
             Ok(None)
         }
+    }
+
+    async fn sign_transaction(
+        &self,
+        digest: &H256,
+        privkey: &[u8]
+    ) -> KoResult<[u8; 65]> {
+        let privkey = SecretKey::from_slice(privkey).expect("privkey");
+        let digest = Message::from_slice(digest.as_bytes()).expect("digest");
+        let signature = SECP256K1.sign_recoverable(&digest, &privkey);
+        let signature_bytes = {
+            let (recover_id, signature) = signature.serialize_compact();
+            let mut bytes = signature.to_vec();
+            bytes.push(recover_id.to_i32() as u8);
+            let mut signature = [0u8; 65];
+            signature.copy_from_slice(&bytes);
+            signature
+        };
+        Ok(signature_bytes)
     }
 
     async fn search_global_data(

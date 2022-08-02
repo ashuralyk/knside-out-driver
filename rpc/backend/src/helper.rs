@@ -15,7 +15,7 @@ use crate::BackendError;
 pub fn build_knsideout_script(code_hash: &H256, args: &[u8]) -> Script {
     Script::new_builder()
         .code_hash(code_hash.pack())
-        .hash_type(ScriptHashType::Data1.into())
+        .hash_type(ScriptHashType::Data.into())
         .args(args.pack())
         .build()
 }

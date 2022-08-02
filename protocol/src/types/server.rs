@@ -10,6 +10,7 @@ use crate::{traits::Backend, types::config::KoCellDep};
 pub struct KoMakeReqeustDigestParams {
     pub sender: String,
     pub contract_call: String,
+    pub private_key: String,
     pub recipient: Option<String>,
     pub previous_cell: Option<OutPoint>,
 }

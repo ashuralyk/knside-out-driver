@@ -23,16 +23,16 @@ pub mod TestVars {
     pub const CKB_INDEXER_URL: &str = "http://127.0.0.1:8116";
 
     pub const OWNER_PRIVATE_KEY: H256 =
-        h256!("0x9a8fc5c463841c152800ec45ef4ceb03586177a7e6a9f34a6e40256310325e43");
-    pub const OWNER_ADDRESS: &str = "ckt1qyqycu3e597mvx7qpdpf45jdpn5u27w574rq8stzv3";
+        h256!("0x8d929e962f940f75aa32054f19a5ea2ce70ae30bfe4ff7cf2dbed70d556265df");
+    pub const OWNER_ADDRESS: &str = "ckt1qyq93wzur9h9l6qwyk6d4dvkuufp6gvl08aszz5syl";
 
     pub const PROJECT_CODE_HASH: H256 =
         h256!("0x0883e9527e2798d7bb3540b1186297464fdfb71bf59566971b0824c781aaa6c0");
     pub const PROJECT_TYPE_ARGS: H256 =
-        h256!("0xd6568eda1c20e30b41cd15be2f9ab8db9446561097ee801cafabdb6ca6133e05");
+        h256!("0x8f160104a98392cc0ca7d6d4c3da92e6e326810fd117397f39b9b2ec7cc3217c");
 
     pub const SECP256K1_TX_HASH: H256 =
-        h256!("0x5c7b70f4fd242ff0fb703de908e2e7eef21621b640fe9a9c752643021a87bc1f");
+        h256!("0xc6bffa9ca9a9dadfec83c0307eee18fe88e42a00d05068510d799e3e4ad3ee87");
     pub const KNSIDEOUT_TX_HASH: H256 =
-        h256!("0xb88a68436c16dbdfbd5d3c3e38c5dcd4905514e0c8ead8e0b1b8533bc63d32e0");
+        h256!("0xc9cc025d89bf5adae1362367cb3fd63fbbfb11a240f31448d021f3e591bf5a55");
 }
