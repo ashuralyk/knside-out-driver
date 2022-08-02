@@ -1,14 +1,11 @@
 use clap::{crate_version, Arg, Command};
 use ko_core::Context;
-use ko_core_assembler::AssemblerImpl;
-use ko_core_driver::DriverImpl;
-use ko_core_executor::ExecutorImpl;
-use ko_protocol::secp256k1::SecretKey;
-use ko_protocol::tokio;
+use ko_protocol::{secp256k1::SecretKey, tokio, KoResult};
+use ko_rpc::RpcServerRuntime;
 use ko_rpc_client::RpcClient;
 
 #[tokio::main]
-async fn main() {
+async fn main() -> KoResult<()> {
     let matches = Command::new("knside-out")
         .version(crate_version!())
         .arg(
@@ -23,20 +20,18 @@ async fn main() {
         .get_matches();
 
     let config_path = matches.value_of("config_path").unwrap();
-    let config = ko_config::load_file(config_path).expect("load config");
+    let config = ko_config::load_file(config_path)?;
 
-    // make instances of assembler, executor and driver
+    // initail CKB rcp client
     let rpc_client = RpcClient::new(&config.ckb_url, &config.ckb_indexer_url);
-    let assembler = AssemblerImpl::new(
-        &rpc_client,
-        &config.project_type_args,
-        &config.project_code_hash,
-    );
-    let driver = DriverImpl::new(
-        &rpc_client,
-        &SecretKey::from_slice(&config.project_owner_privkey.0).unwrap(),
-    );
-    let executor = ExecutorImpl::new();
+
+    // start rpc server
+    RpcServerRuntime::run(&config.rpc_endpoint, &rpc_client, &config.as_ref().into()).await?;
+
+    // initail drive context
+    let privkey =
+        SecretKey::from_slice(config.project_owner_privkey.as_bytes()).expect("private key");
+    let context = Context::new(&rpc_client, &privkey, &config.as_ref().into());
 
     // handle exception operation
     let ctrl_c_handler = tokio::spawn(async {
@@ -54,14 +49,15 @@ async fn main() {
         }
     });
 
-    // run context, will stop when any type of error throwed out
-    let ctx = Context::new(assembler, executor, driver);
+    // enter drive loop, will stop when any type of error throwed out
     tokio::select! {
         _ = ctrl_c_handler => {
             println!("<Ctrl-C> is on call, quit knside-out drive loop");
         },
-        Err(error) = ctx.start(&config.project_cell_deps) => {
+        Err(error) = context.start(&config.project_cell_deps) => {
             println!("[ERROR] {}", error);
         }
     }
+
+    Ok(())
 }

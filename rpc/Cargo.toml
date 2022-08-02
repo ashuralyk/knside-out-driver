@@ -11,8 +11,6 @@ ko-rpc-backend = { path = "./backend" }
 ko-rpc-server = { path = "./server" }
 
 [dev-dependencies]
-jsonrpsee-core = "0.15"
-jsonrpsee-http-client = "0.15"
-jsonrpsee-http-server = "0.15"
+jsonrpsee = { version = "0.15", features = ["http-server", "http-client"] }
 
 ko-rpc-client = { path = "./client" }

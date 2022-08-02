@@ -1,12 +1,14 @@
 use ko_protocol::ckb_sdk::constants::TYPE_ID_CODE_HASH;
 use ko_protocol::ckb_sdk::rpc::ckb_indexer::{ScriptType, SearchKey};
 use ko_protocol::ckb_types::core::{Capacity, DepType, ScriptHashType, TransactionView};
-use ko_protocol::ckb_types::packed::{CellDep, CellInput, CellOutput, Script, WitnessArgs};
+use ko_protocol::ckb_types::packed::{
+    CellDep, CellInput, CellOutput, OutPoint, Script, WitnessArgs,
+};
 use ko_protocol::ckb_types::prelude::{Builder, Entity, Pack, Unpack};
 use ko_protocol::ckb_types::{bytes::Bytes, H256};
 use ko_protocol::traits::{Assembler, CkbClient};
 use ko_protocol::types::assembler::{KoAssembleReceipt, KoCellOutput, KoProject, KoRequest};
-use ko_protocol::{async_trait, KoResult};
+use ko_protocol::{async_trait, KoResult, ProjectDeps};
 
 mod error;
 mod helper;
@@ -21,19 +23,19 @@ pub struct AssemblerImpl<C: CkbClient> {
 }
 
 impl<C: CkbClient> AssemblerImpl<C> {
-    pub fn new(rpc_client: &C, project_args: &H256, code_hash: &H256) -> AssemblerImpl<C> {
+    pub fn new(rpc_client: &C, project_deps: &ProjectDeps) -> AssemblerImpl<C> {
         let project_id = Script::new_builder()
             .code_hash(TYPE_ID_CODE_HASH.pack())
             .hash_type(ScriptHashType::Type.into())
-            .args(project_args.as_bytes().pack())
+            .args(project_deps.project_type_args.as_bytes().pack())
             .build()
             .calc_script_hash()
             .unpack();
         AssemblerImpl {
             project_id,
-            project_id_args: project_args.clone(),
+            project_id_args: project_deps.project_type_args.clone(),
             rpc_client: rpc_client.clone(),
-            project_code_hash: code_hash.clone(),
+            project_code_hash: project_deps.project_code_hash.clone(),
         }
     }
 }
@@ -55,6 +57,7 @@ impl<C: CkbClient> Assembler for AssemblerImpl<C> {
         &self,
         cell_number: u8,
         cell_deps: &[CellDep],
+        skipped_outpoints: &[OutPoint],
     ) -> KoResult<(TransactionView, KoAssembleReceipt)> {
         // find project global cell
         let global_cell =
@@ -75,7 +78,6 @@ impl<C: CkbClient> Assembler for AssemblerImpl<C> {
             script_type: ScriptType::Type,
             filter: None,
         };
-        let mut total_inputs_capacity: u64 = global_cell.output.capacity().unpack();
         let mut after = None;
         while requests.len() < cell_number as usize {
             let result = self
@@ -87,6 +89,9 @@ impl<C: CkbClient> Assembler for AssemblerImpl<C> {
                 .objects
                 .into_iter()
                 .try_for_each::<_, KoResult<_>>(|cell| {
+                    if skipped_outpoints.contains(&cell.out_point.clone().into()) {
+                        return Ok(());
+                    }
                     let output = cell.output.into();
                     if !helper::check_valid_request(&output, &self.project_code_hash) {
                         // println!("[WARN] find invalid reqeust format");
@@ -109,7 +114,6 @@ impl<C: CkbClient> Assembler for AssemblerImpl<C> {
                     };
                     let payment = {
                         let capacity: u64 = output.capacity().unpack();
-                        total_inputs_capacity += capacity;
                         let exact_capacity = output
                             .occupied_capacity(Capacity::bytes(cell.output_data.len()).unwrap())
                             .unwrap()
@@ -122,6 +126,7 @@ impl<C: CkbClient> Assembler for AssemblerImpl<C> {
                         lock_script,
                         recipient_script,
                         payment,
+                        output.capacity().unpack(),
                     ));
                     ko_tx = ko_tx
                         .as_advanced_builder()
@@ -142,7 +147,7 @@ impl<C: CkbClient> Assembler for AssemblerImpl<C> {
             requests,
             global_cell.output_data,
             global_cell.output.lock(),
-            total_inputs_capacity,
+            global_cell.output.capacity().unpack(),
         );
         Ok((ko_tx, receipt))
     }
@@ -187,7 +192,8 @@ impl<C: CkbClient> Assembler for AssemblerImpl<C> {
         // firstly check inputs/outputs capacity
         if inputs_capacity <= outputs_capacity {
             return Err(AssemblerError::InsufficientGlobalCellCapacity(
-                outputs_capacity - inputs_capacity,
+                inputs_capacity,
+                outputs_capacity,
             )
             .into());
         }

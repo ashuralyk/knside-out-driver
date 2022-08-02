@@ -924,6 +924,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "8bd0d559d5e679b1ab2f869b486a11182923863b1b3ee8b421763cdd707b783a"
 dependencies = [
  "jsonrpsee-core",
+ "jsonrpsee-http-client",
  "jsonrpsee-http-server",
  "jsonrpsee-proc-macros",
  "jsonrpsee-types",
@@ -1102,9 +1103,7 @@ dependencies = [
 name = "ko-rpc"
 version = "0.1.0"
 dependencies = [
- "jsonrpsee-core",
- "jsonrpsee-http-client",
- "jsonrpsee-http-server",
+ "jsonrpsee",
  "ko-protocol",
  "ko-rpc-backend",
  "ko-rpc-client",

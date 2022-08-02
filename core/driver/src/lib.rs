@@ -126,14 +126,14 @@ impl<C: CkbClient> Driver for DriverImpl<C> {
                     let block = self.rpc_client.get_block(&block_hash).await.unwrap();
                     block_number = block.header.inner.number.into();
                     println!(
-                        "[INFO] transaction commited in block #{}, wait for confirmed...",
+                        "[INFO] transaction commited in block #{}, wait confirm...",
                         block_number
                     );
                 }
             } else {
                 let tip = self.rpc_client.get_tip_header().await.unwrap();
                 let tip_number: u64 = tip.inner.number.into();
-                if tip_number > block_number + 8 {
+                if tip_number > block_number + 5 {
                     println!("[INFO] transaction confirmed");
                     break;
                 }

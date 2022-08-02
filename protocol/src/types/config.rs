@@ -30,5 +30,12 @@ pub struct KoConfig {
     pub project_code_hash: H256,
     pub ckb_url: String,
     pub ckb_indexer_url: String,
+    pub rpc_endpoint: String,
     pub project_cell_deps: Vec<KoCellDep>,
+}
+
+impl AsRef<KoConfig> for KoConfig {
+    fn as_ref(&self) -> &Self {
+        self
+    }
 }

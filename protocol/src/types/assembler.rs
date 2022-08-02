@@ -9,6 +9,7 @@ pub struct KoRequest {
     pub lock_script: Script,
     pub recipient_script: Option<Script>,
     pub payment: u64,
+    pub ckb: u64,
 }
 
 #[derive(Constructor)]
@@ -22,7 +23,7 @@ pub struct KoAssembleReceipt {
     pub requests: Vec<KoRequest>,
     pub global_json_data: Bytes,
     pub global_lockscript: Script,
-    pub total_inputs_capacity: u64,
+    pub global_ckb: u64,
 }
 
 #[derive(Constructor)]

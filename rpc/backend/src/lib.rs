@@ -4,19 +4,16 @@ use std::str::FromStr;
 use ko_protocol::ckb_jsonrpc_types::{OutputsValidator, TransactionView as JsonTxView};
 use ko_protocol::ckb_sdk::rpc::ckb_indexer::{ScriptType, SearchKey, SearchKeyFilter};
 use ko_protocol::ckb_sdk::Address;
+use ko_protocol::ckb_sdk::SECP256K1;
 use ko_protocol::ckb_types::core::{Capacity, TransactionBuilder, TransactionView};
-use ko_protocol::ckb_types::packed::{
-    CellDep, CellInput, CellOutput, OutPoint, Script, Transaction,
-};
+use ko_protocol::ckb_types::packed::{CellInput, CellOutput, OutPoint, Script, Transaction};
 use ko_protocol::ckb_types::prelude::{Builder, Entity, Pack, Unpack};
 use ko_protocol::ckb_types::{bytes::Bytes, H256};
+use ko_protocol::secp256k1::{Message, SecretKey};
 use ko_protocol::serde_json::to_string;
 use ko_protocol::traits::{Backend, CkbClient};
-use ko_protocol::types::config::KoCellDep;
 use ko_protocol::types::generated::{mol_deployment, mol_flag_0};
-use ko_protocol::{async_trait, mol_flag_1, mol_flag_2, KoResult};
-use ko_protocol::ckb_sdk::SECP256K1;
-use ko_protocol::secp256k1::{Message, SecretKey};
+use ko_protocol::{async_trait, mol_flag_1, mol_flag_2, KoResult, ProjectDeps};
 
 #[cfg(test)]
 mod tests;
@@ -49,8 +46,7 @@ impl<C: CkbClient> Backend for BackendImpl<C> {
         &mut self,
         contract: Bytes,
         address: String,
-        project_code_hash: &H256,
-        project_cell_deps: &[KoCellDep],
+        project_deps: &ProjectDeps,
     ) -> KoResult<(H256, H256)> {
         // make global of output-data
         let global_data_json = helper::get_global_json_data(&contract)?;
@@ -61,8 +57,10 @@ impl<C: CkbClient> Backend for BackendImpl<C> {
             Address::from_str(&address).map_err(|_| BackendError::InvalidAddressFormat(address))?;
         println!("address = {}", ckb_address);
         let secp256k1_script: Script = ckb_address.payload().into();
-        let global_type_script =
-            helper::build_knsideout_script(project_code_hash, mol_flag_0(&[0u8; 32]).as_slice());
+        let global_type_script = helper::build_knsideout_script(
+            &project_deps.project_code_hash,
+            mol_flag_0(&[0u8; 32]).as_slice(),
+        );
         let deployment = mol_deployment(&contract).as_bytes();
         let mut outputs = vec![
             // project cell
@@ -121,7 +119,7 @@ impl<C: CkbClient> Backend for BackendImpl<C> {
             .type_(Some(project_type_script).pack())
             .build();
         let global_type_script = helper::build_knsideout_script(
-            project_code_hash,
+            &project_deps.project_code_hash,
             mol_flag_0(&project_type_id.unpack().0).as_slice(),
         );
         outputs[1] = outputs[1]
@@ -136,18 +134,12 @@ impl<C: CkbClient> Backend for BackendImpl<C> {
             .build_exact_capacity(Capacity::shannons(change))
             .unwrap();
 
-        // build knside-out transaction celldeps
-        let cell_deps = project_cell_deps
-            .iter()
-            .map(|cell_dep| cell_dep.into())
-            .collect::<Vec<CellDep>>();
-
         // build knside-out transaction
         let tx = TransactionBuilder::default()
             .inputs(inputs)
             .outputs(outputs)
             .outputs_data(outputs_data.pack())
-            .cell_deps(cell_deps)
+            .cell_deps(project_deps.project_cell_deps.clone())
             .build();
 
         // generate transaction digest
@@ -162,11 +154,11 @@ impl<C: CkbClient> Backend for BackendImpl<C> {
         &mut self,
         contract: Bytes,
         address: String,
-        project_type_args: &H256,
-        project_cell_deps: &[KoCellDep],
+        project_deps: &ProjectDeps,
     ) -> KoResult<H256> {
         // search existed project deployment cell on CKB
-        let project_type_script = helper::recover_type_id_script(project_type_args.as_bytes());
+        let project_type_script =
+            helper::recover_type_id_script(project_deps.project_type_args.as_bytes());
         let search_key = SearchKey {
             script: project_type_script.into(),
             script_type: ScriptType::Type,
@@ -178,7 +170,10 @@ impl<C: CkbClient> Backend for BackendImpl<C> {
             .await
             .map_err(|err| BackendError::IndexerRpcError(err.to_string()))?;
         if result.objects.is_empty() {
-            return Err(BackendError::MissProjectDeploymentCell(project_type_args.clone()).into());
+            return Err(BackendError::MissProjectDeploymentCell(
+                project_deps.project_type_args.clone(),
+            )
+            .into());
         }
         let deployment_cell = &result.objects[0];
 
@@ -235,18 +230,12 @@ impl<C: CkbClient> Backend for BackendImpl<C> {
             .build_exact_capacity(Capacity::shannons(change))
             .unwrap();
 
-        // build knside-out transaction celldeps
-        let cell_deps = project_cell_deps
-            .iter()
-            .map(|cell_dep| cell_dep.into())
-            .collect::<Vec<CellDep>>();
-
         // build knside-out transaction
         let tx = TransactionBuilder::default()
             .inputs(inputs)
             .outputs(outputs)
             .outputs_data(outputs_data.pack())
-            .cell_deps(cell_deps)
+            .cell_deps(project_deps.project_cell_deps.clone())
             .build();
 
         // generate transaction digest
@@ -259,17 +248,17 @@ impl<C: CkbClient> Backend for BackendImpl<C> {
     async fn create_project_request_digest(
         &mut self,
         address: String,
+        payment_ckb: u64,
         recipient: Option<String>,
         previous_cell: Option<OutPoint>,
         function_call: String,
-        project_code_hash: &H256,
-        project_type_args: &H256,
-        project_cell_deps: &[KoCellDep],
+        project_deps: &ProjectDeps,
     ) -> KoResult<H256> {
         // build necessary scripts
-        let project_type_id = helper::recover_type_id_script(project_type_args.as_bytes())
-            .calc_script_hash()
-            .unpack();
+        let project_type_id =
+            helper::recover_type_id_script(project_deps.project_type_args.as_bytes())
+                .calc_script_hash()
+                .unpack();
         let secp256k1_script: Script = Address::from_str(&address)
             .map_err(|_| BackendError::InvalidAddressFormat(address))?
             .payload()
@@ -286,7 +275,8 @@ impl<C: CkbClient> Backend for BackendImpl<C> {
             }
         };
         let personal_args = mol_flag_1(&project_type_id.0);
-        let personal_script = helper::build_knsideout_script(project_code_hash, &personal_args);
+        let personal_script =
+            helper::build_knsideout_script(&project_deps.project_code_hash, &personal_args);
 
         // check previous cell
         let mut previous_json_data = String::new();
@@ -322,13 +312,16 @@ impl<C: CkbClient> Backend for BackendImpl<C> {
             secp256k1_script.as_slice(),
             recipient_secp256k1_script.map(|v| v.as_bytes()),
         );
-        let request_script = helper::build_knsideout_script(project_code_hash, &request_args);
+        let request_script =
+            helper::build_knsideout_script(&project_deps.project_code_hash, &request_args);
+        let request_capacity =
+            Capacity::bytes(previous_json_data.len()).unwrap().as_u64() + payment_ckb;
         let mut outputs = vec![
             // reqeust cell
             CellOutput::new_builder()
                 .lock(request_script)
                 .type_(Some(personal_script).pack())
-                .build_exact_capacity(Capacity::bytes(previous_json_data.len()).unwrap())
+                .build_exact_capacity(Capacity::shannons(request_capacity))
                 .unwrap(),
             // change cell
             CellOutput::new_builder()
@@ -361,18 +354,12 @@ impl<C: CkbClient> Backend for BackendImpl<C> {
             .build_exact_capacity(Capacity::shannons(change))
             .unwrap();
 
-        // build knside-out transaction celldeps
-        let cell_deps = project_cell_deps
-            .iter()
-            .map(|cell_dep| cell_dep.into())
-            .collect::<Vec<CellDep>>();
-
         // build knside-out transaction
         let tx = TransactionBuilder::default()
             .inputs(inputs)
             .outputs(outputs)
             .outputs_data(outputs_data.pack())
-            .cell_deps(cell_deps)
+            .cell_deps(project_deps.project_cell_deps.clone())
             .build();
 
         // generate transaction digest
@@ -406,11 +393,7 @@ impl<C: CkbClient> Backend for BackendImpl<C> {
         }
     }
 
-    async fn sign_transaction(
-        &self,
-        digest: &H256,
-        privkey: &[u8]
-    ) -> KoResult<[u8; 65]> {
+    async fn sign_transaction(&self, digest: &H256, privkey: &[u8]) -> KoResult<[u8; 65]> {
         let privkey = SecretKey::from_slice(privkey).expect("privkey");
         let digest = Message::from_slice(digest.as_bytes()).expect("digest");
         let signature = SECP256K1.sign_recoverable(&digest, &privkey);
@@ -425,17 +408,15 @@ impl<C: CkbClient> Backend for BackendImpl<C> {
         Ok(signature_bytes)
     }
 
-    async fn search_global_data(
-        &self,
-        project_code_hash: &H256,
-        project_type_args: &H256,
-    ) -> KoResult<String> {
+    async fn search_global_data(&self, project_deps: &ProjectDeps) -> KoResult<String> {
         // build global type_script search key
-        let project_type_id = helper::recover_type_id_script(project_type_args.as_bytes())
-            .calc_script_hash()
-            .unpack();
+        let project_type_id =
+            helper::recover_type_id_script(project_deps.project_type_args.as_bytes())
+                .calc_script_hash()
+                .unpack();
         let global_args = mol_flag_0(&project_type_id.0);
-        let global_type_script = helper::build_knsideout_script(project_code_hash, &global_args);
+        let global_type_script =
+            helper::build_knsideout_script(&project_deps.project_code_hash, &global_args);
         let search = SearchKey {
             script: global_type_script.into(),
             script_type: ScriptType::Type,
@@ -449,14 +430,18 @@ impl<C: CkbClient> Backend for BackendImpl<C> {
             .await
             .map_err(|err| BackendError::IndexerRpcError(err.to_string()))?;
         if result.objects.is_empty() {
-            return Err(BackendError::MissProjectGlobalCell(project_type_args.clone()).into());
+            return Err(BackendError::MissProjectGlobalCell(
+                project_deps.project_type_args.clone(),
+            )
+            .into());
         }
 
         // return global json_data
         let global_json_data = {
             let bytes = result.objects[0].output_data.as_bytes();
-            String::from_utf8(bytes.to_vec())
-                .map_err(|_| BackendError::InvalidGlobalDataFormat(project_type_args.clone()))?
+            String::from_utf8(bytes.to_vec()).map_err(|_| {
+                BackendError::InvalidGlobalDataFormat(project_deps.project_type_args.clone())
+            })?
         };
         Ok(global_json_data)
     }
@@ -464,16 +449,16 @@ impl<C: CkbClient> Backend for BackendImpl<C> {
     async fn search_personal_data(
         &self,
         address: String,
-        project_code_hash: &H256,
-        project_type_args: &H256,
+        project_deps: &ProjectDeps,
     ) -> KoResult<Vec<(String, OutPoint)>> {
         // build personal type_script search key
-        let project_type_id = helper::recover_type_id_script(project_type_args.as_bytes())
-            .calc_script_hash()
-            .unpack();
+        let project_type_id =
+            helper::recover_type_id_script(project_deps.project_type_args.as_bytes())
+                .calc_script_hash()
+                .unpack();
         let personal_args = mol_flag_1(&project_type_id.0);
         let personal_type_script =
-            helper::build_knsideout_script(project_code_hash, &personal_args);
+            helper::build_knsideout_script(&project_deps.project_code_hash, &personal_args);
         let secp256k1_script: Script = Address::from_str(&address)
             .map_err(|_| BackendError::InvalidAddressFormat(address))?
             .payload()
@@ -506,7 +491,9 @@ impl<C: CkbClient> Backend for BackendImpl<C> {
                     let json_data = {
                         let bytes = cell.output_data.as_bytes();
                         String::from_utf8(bytes.to_vec()).map_err(|_| {
-                            BackendError::InvalidPersonalDataFormat(project_type_args.clone())
+                            BackendError::InvalidPersonalDataFormat(
+                                project_deps.project_type_args.clone(),
+                            )
                         })?
                     };
                     personal_json_data.push((json_data, cell.out_point.into()));

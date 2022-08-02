@@ -1,7 +1,3 @@
-use std::cell::RefCell;
-use std::collections::HashMap;
-use std::rc::Rc;
-
 use ko_protocol::ckb_types::bytes::Bytes;
 use ko_protocol::ckb_types::H256;
 use ko_protocol::derive_more::Constructor;
@@ -38,16 +34,8 @@ impl Executor for ExecutorImpl {
             .exec()
             .map_err(|err| ExecutorError::ErrorLoadProjectLuaCode(err.to_string()))?;
         // prepare global context `msg`
-        let cost_ckbs = Rc::new(RefCell::new(HashMap::new()));
         let msg = luac!(lua.create_table());
         luac!(msg.set("owner", hex::encode(project_owner.as_bytes())));
-        let ckbs = cost_ckbs.clone();
-        let ckb_cost = luac!(lua.create_function(move |lua, ckb: u64| {
-            let i: usize = lua.globals().get("i").expect("ckb_cost get i");
-            ckbs.borrow_mut().insert(i, ckb);
-            Ok(true)
-        }));
-        luac!(msg.set("ckb_cost", ckb_cost));
         let global_table = {
             let json_string = String::from_utf8(global_json_data.to_vec())
                 .map_err(|_| ExecutorError::InvalidUTF8FormatForGlobalData)?;
@@ -59,23 +47,6 @@ impl Executor for ExecutorImpl {
         luac!(lua.globals().set("msg", msg));
         // running each user function_call requests
         let personal_outputs = helper::parse_requests_to_outputs(&lua, user_requests)?;
-        // check input/output ckbs are wether matched
-        user_requests
-            .iter()
-            .enumerate()
-            .try_for_each::<_, KoResult<_>>(|(i, request)| {
-                if let Some(payment) = cost_ckbs.borrow().get(&i) {
-                    if &request.payment < payment {
-                        return Err(ExecutorError::InsufficientRequiredCkb(
-                            request.payment,
-                            *payment,
-                            i,
-                        )
-                        .into());
-                    }
-                }
-                Ok(())
-            })?;
         // make final global json string
         let global_json_data = {
             let msg: Table = luac!(lua.globals().get("msg"));

@@ -1,43 +1,40 @@
 use std::time::Duration;
 
-use ko_protocol::ckb_types::packed::CellDep;
+use ko_core_assembler::AssemblerImpl;
+use ko_core_driver::DriverImpl;
+use ko_core_executor::ExecutorImpl;
+use ko_protocol::ckb_types::packed::{CellDep, OutPoint};
 use ko_protocol::ckb_types::prelude::Unpack;
 use ko_protocol::ckb_types::{bytes::Bytes, H256};
-use ko_protocol::traits::{Assembler, Driver, Executor};
+use ko_protocol::secp256k1::SecretKey;
+use ko_protocol::traits::{Assembler, CkbClient, Driver, Executor};
 use ko_protocol::types::assembler::KoCellOutput;
 use ko_protocol::types::config::KoCellDep;
-use ko_protocol::{tokio, KoResult};
+use ko_protocol::{tokio, KoResult, ProjectDeps};
 
 #[cfg(test)]
 mod tests;
 
-pub struct Context<A, E, D>
-where
-    A: Assembler,
-    E: Executor,
-    D: Driver,
-{
-    ko_assembler: A,
-    ko_executor: E,
-    ko_driver: D,
+pub struct Context<C: CkbClient> {
+    pub assembler: AssemblerImpl<C>,
+    pub executor: ExecutorImpl,
+    pub driver: DriverImpl<C>,
 
     drive_interval: Duration,
     max_reqeusts_count: u8,
+
+    invalid_outpoints: Vec<OutPoint>,
 }
 
-impl<A, E, D> Context<A, E, D>
-where
-    A: Assembler,
-    E: Executor,
-    D: Driver,
-{
-    pub fn new(assembler: A, executor: E, driver: D) -> Context<A, E, D> {
+impl<C: CkbClient> Context<C> {
+    pub fn new(rpc_client: &C, privkey: &SecretKey, project_deps: &ProjectDeps) -> Context<C> {
         Context {
-            ko_assembler: assembler,
-            ko_executor: executor,
-            ko_driver: driver,
+            assembler: AssemblerImpl::new(rpc_client, project_deps),
+            executor: ExecutorImpl::new(),
+            driver: DriverImpl::new(rpc_client, privkey),
             drive_interval: Duration::from_secs(3),
             max_reqeusts_count: 20,
+            invalid_outpoints: Vec::new(),
         }
     }
 
@@ -51,13 +48,13 @@ where
         self
     }
 
-    pub async fn start(self, project_cell_deps: &[KoCellDep]) -> KoResult<()> {
+    pub async fn start(mut self, project_cell_deps: &[KoCellDep]) -> KoResult<()> {
         let project_dep = self
-            .ko_assembler
+            .assembler
             .prepare_ko_transaction_project_celldep()
             .await?;
         let mut transaction_deps = self
-            .ko_driver
+            .driver
             .prepare_ko_transaction_normal_celldeps(project_cell_deps)
             .await?;
         transaction_deps.insert(0, project_dep.cell_dep);
@@ -67,10 +64,10 @@ where
             let hash = self.drive(&project_dep.lua_code, &transaction_deps).await?;
             if let Some(hash) = hash {
                 println!(
-                    "[INFO] send knside-out tansaction({}), wait for committed...",
+                    "[INFO] send knside-out tansaction({}), wait commit...",
                     hash
                 );
-                self.ko_driver
+                self.driver
                     .wait_ko_transaction_committed(&hash, &self.drive_interval)
                     .await?;
             } else {
@@ -80,21 +77,23 @@ where
     }
 
     pub async fn drive(
-        &self,
+        &mut self,
         project_lua_code: &Bytes,
         project_cell_deps: &[CellDep],
     ) -> KoResult<Option<H256>> {
+        // assemble knside-out transaction
         let (tx, receipt) = self
-            .ko_assembler
+            .assembler
             .generate_ko_transaction_with_inputs_and_celldeps(
                 self.max_reqeusts_count,
                 project_cell_deps,
+                &self.invalid_outpoints,
             )
             .await?;
         if receipt.requests.is_empty() {
             return Ok(None);
         }
-        let result = self.ko_executor.execute_lua_requests(
+        let result = self.executor.execute_lua_requests(
             &receipt.global_json_data,
             &receipt.global_lockscript.calc_script_hash().unpack(),
             &receipt.requests,
@@ -104,20 +103,41 @@ where
             Some(result.global_json_data),
             receipt.global_lockscript,
         )];
-        // assemble transaction outputs import
-        for i in 0..receipt.requests.len() {
-            let (data, lock_script) = result.personal_outputs[i].clone();
-            cell_outputs.push(KoCellOutput::new(data, lock_script));
+        // trim unworkable requests from transaction inputs
+        let mut inputs = tx.inputs().into_iter().map(Some).collect::<Vec<_>>();
+        let mut total_inputs_capacity = receipt.global_ckb;
+        result
+            .personal_outputs
+            .into_iter()
+            .enumerate()
+            .for_each(|(i, output)| match output {
+                Ok((data, lock_script)) => {
+                    cell_outputs.push(KoCellOutput::new(data, lock_script));
+                    total_inputs_capacity += receipt.requests[i].ckb;
+                }
+                Err(err) => {
+                    // because the frist input is global_cell, so the offset is 1
+                    let outpoint = inputs[i + 1].as_ref().unwrap().previous_output();
+                    self.invalid_outpoints.push(outpoint);
+                    inputs[i + 1] = None;
+                    println!("[ERROR] {} [SKIP]", err);
+                }
+            });
+        let inputs = inputs.into_iter().flatten().collect::<Vec<_>>();
+        // if only have global_cell exist, skip this try
+        if inputs.len() == 1 {
+            return Ok(None);
         }
+        let tx = tx.as_advanced_builder().set_inputs(inputs).build();
         let tx = self
-            .ko_assembler
-            .fill_ko_transaction_with_outputs(tx, &cell_outputs, receipt.total_inputs_capacity)
+            .assembler
+            .fill_ko_transaction_with_outputs(tx, &cell_outputs, total_inputs_capacity)
             .await?;
-        let signature = self.ko_driver.sign_ko_transaction(&tx);
+        let signature = self.driver.sign_ko_transaction(&tx);
         let tx = self
-            .ko_assembler
+            .assembler
             .complete_ko_transaction_with_signature(tx, signature);
-        let hash = self.ko_driver.send_ko_transaction(tx).await?;
+        let hash = self.driver.send_ko_transaction(tx).await?;
         Ok(Some(hash))
     }
 }

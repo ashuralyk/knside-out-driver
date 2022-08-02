@@ -1,3 +1,7 @@
+use std::cell::RefCell;
+use std::collections::HashMap;
+use std::rc::Rc;
+
 use ko_protocol::ckb_types::bytes::Bytes;
 use ko_protocol::ckb_types::packed::Script;
 use ko_protocol::types::assembler::KoRequest;
@@ -7,11 +11,23 @@ use mlua::{Lua, LuaSerdeExt, Table, Value};
 use crate::error::ExecutorError;
 use crate::luac;
 
+type ExecuteResult = Vec<KoResult<(Option<Bytes>, Script)>>;
+
 pub fn parse_requests_to_outputs(
     lua: &Lua,
     requests: &[KoRequest],
-) -> KoResult<Vec<(Option<Bytes>, Script)>> {
-    let personal_outputs = requests
+) -> KoResult<ExecuteResult> {
+    let msg: Table = luac!(lua.globals().get("msg"));
+    let cost_ckbs = Rc::new(RefCell::new(HashMap::new()));
+    let ckbs = cost_ckbs.clone();
+    let ckb_cost = luac!(lua.create_function(move |lua, ckb: u64| {
+        let i: usize = lua.globals().get("i").expect("ckb_cost get i");
+        ckbs.borrow_mut().insert(i, ckb);
+        Ok(true)
+    }));
+    luac!(msg.set("ckb_cost", ckb_cost));
+    luac!(lua.globals().set("msg", msg));
+    let user_outputs = requests
         .iter()
         .enumerate()
         .map(|(i, request)| {
@@ -72,8 +88,15 @@ pub fn parse_requests_to_outputs(
                     "the return value can only be nil or table".into(),
                 ))?,
             };
+            // check cell_capacity
+            if let Some(require) = cost_ckbs.borrow().get(&i) {
+                let offer = &request.payment;
+                if offer < require {
+                    return Err(ExecutorError::InsufficientRequiredCkb(*offer, *require, i).into());
+                }
+            }
             Ok((json_data, owner_lockscript))
         })
-        .collect::<KoResult<Vec<_>>>()?;
-    Ok(personal_outputs)
+        .collect::<Vec<_>>();
+    Ok(user_outputs)
 }

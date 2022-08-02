@@ -4,20 +4,21 @@ use derive_more::Constructor;
 use serde::{Deserialize, Serialize};
 use tokio::sync::Mutex;
 
-use crate::{traits::Backend, types::config::KoCellDep};
+use crate::{traits::Backend, ProjectDeps};
 
 #[derive(Deserialize, Serialize)]
 pub struct KoMakeRequestDigestParams {
     pub sender: String,
+    pub payment: String,
     pub contract_call: String,
-    pub private_key: String,
+    pub private_key: H256,
     pub recipient: Option<String>,
     pub previous_cell: Option<OutPoint>,
 }
 
 #[derive(Deserialize, Serialize)]
 pub struct KoSendDigestSignatureParams {
-    pub digest: String,
+    pub digest: H256,
     pub signature: String,
 }
 
@@ -34,9 +35,7 @@ pub struct KoFetchPersonalDataResponse {
 
 #[derive(Constructor)]
 pub struct Context<B: Backend + 'static> {
-    pub project_code_hash: H256,
-    pub project_type_args: H256,
-    pub project_cell_deps: Vec<KoCellDep>,
+    pub project_deps: ProjectDeps,
     pub backend: Mutex<B>,
 }
 
