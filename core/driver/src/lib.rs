@@ -101,6 +101,7 @@ impl<C: CkbClient> Driver for DriverImpl<C> {
         &self,
         hash: &H256,
         interval: &Duration,
+        confirms: u8,
     ) -> KoResult<()> {
         let mut block_number = 0u64;
         loop {
@@ -133,7 +134,7 @@ impl<C: CkbClient> Driver for DriverImpl<C> {
             } else {
                 let tip = self.rpc_client.get_tip_header().await.unwrap();
                 let tip_number: u64 = tip.inner.number.into();
-                if tip_number > block_number + 5 {
+                if tip_number > block_number + confirms as u64 {
                     println!("[INFO] transaction confirmed");
                     break;
                 }

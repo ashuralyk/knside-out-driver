@@ -1,5 +1,5 @@
 # type_args is script_args which generates project type_id
-project_type_args = "0xdd53c2bb4be8102693feb11b8325cbd69b1265cb5f215c6cfff5fefbaede50ba"
+project_type_args = "0x3fd9221c7ca05c98b3bd8247adf3291212ed1663a131752174981e98f994da4d"
 
 # the deployer of this project
 project_owner_privkey = "0x8d929e962f940f75aa32054f19a5ea2ce70ae30bfe4ff7cf2dbed70d556265df"
@@ -8,10 +8,10 @@ project_owner_privkey = "0x8d929e962f940f75aa32054f19a5ea2ce70ae30bfe4ff7cf2dbed
 project_code_hash = "0x8f11b7a80bb50a518cd29170cbc72b2ab8ef94fc8297f75cfa9f8917d5057e4b"
 
 # url for connecting CKB node
-ckb_url = "http://127.0.0.1:8114"
+ckb_url = "http://127.0.0.1:8114/"
 
 # url for connecting ckb indexer service
-ckb_indexer_url = "http://127.0.0.1:8116"
+ckb_indexer_url = "http://127.0.0.1:8116/"
 
 # endpoint for running rpc server
 rpc_endpoint = "0.0.0.0:8090"
@@ -21,7 +21,17 @@ project_cell_deps = [
     # omni
     # { transaction_hash = "", cell_index = 0, dep_type = 0 },
     # secp256k1
-    { transaction_hash = "0xc6bffa9ca9a9dadfec83c0307eee18fe88e42a00d05068510d799e3e4ad3ee87", cell_index = 0, dep_type = 1 },
+    { transaction_hash = "0xf8de3bb47d055cdf460d93a2a6e1b05f7432f9777c8c474abf4eec1d4aee5d37", cell_index = 0, dep_type = 1 },
     # knside-out
-    { transaction_hash = "0xb769ef9ccc18b5a883a4a44f31217036458be38dbef874a10e69d8f5b0f322a0", cell_index = 0, dep_type = 0 },
+    { transaction_hash = "0x2bec96b9d22f3c72ad75423395aa8d5ad3881cf13bfbf1ffbf8a4bd7994621e7", cell_index = 0, dep_type = 0 },
 ]
+
+[drive_settings]
+# the time duration of drive loop interval
+drive_interval_sec = 3
+
+# the max number of transaction inputs in one drive loop
+max_reqeusts_count = 20
+
+# the block confirmations count to checkout knside-out transaction status
+block_confirms_count = 3

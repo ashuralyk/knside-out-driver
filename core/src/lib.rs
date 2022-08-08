@@ -22,6 +22,7 @@ pub struct Context<C: CkbClient> {
 
     drive_interval: Duration,
     max_reqeusts_count: u8,
+    block_confirms_count: u8,
 
     invalid_outpoints: Vec<OutPoint>,
 }
@@ -34,17 +35,23 @@ impl<C: CkbClient> Context<C> {
             driver: DriverImpl::new(rpc_client, privkey),
             drive_interval: Duration::from_secs(3),
             max_reqeusts_count: 20,
+            block_confirms_count: 3,
             invalid_outpoints: Vec::new(),
         }
     }
 
-    pub fn set_drive_interval(mut self, interval: Duration) -> Self {
-        self.drive_interval = interval;
+    pub fn set_drive_interval(mut self, interval: u8) -> Self {
+        self.drive_interval = Duration::from_secs(interval as u64);
         self
     }
 
     pub fn set_max_requests_count(mut self, requests_count: u8) -> Self {
         self.max_reqeusts_count = requests_count;
+        self
+    }
+
+    pub fn set_confirms_count(mut self, confirms: u8) -> Self {
+        self.block_confirms_count = confirms;
         self
     }
 
@@ -68,7 +75,11 @@ impl<C: CkbClient> Context<C> {
                     hash
                 );
                 self.driver
-                    .wait_ko_transaction_committed(&hash, &self.drive_interval)
+                    .wait_ko_transaction_committed(
+                        &hash,
+                        &self.drive_interval,
+                        self.block_confirms_count,
+                    )
                     .await?;
             } else {
                 tokio::time::sleep(self.drive_interval).await;

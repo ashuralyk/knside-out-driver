@@ -40,9 +40,8 @@ pub struct RpcServer<B: Backend + 'static> {
 impl<B: Backend + 'static> KnsideRpcServer for RpcServer<B> {
     async fn make_request_digest(&self, payload: KoMakeRequestDigestParams) -> RpcResult<String> {
         println!(
-            " [RPC] receive `make_request_digest` rpc call <= {}({})",
-            payload.sender,
-            payload.contract_call
+            " [RPC] receive `make_request_digest` rpc call <= {}: {}",
+            payload.sender, payload.contract_call
         );
         let payment = HumanCapacity::from_str(&payload.payment).map_err(Error::Custom)?;
         let mut backend = self.ctx.backend.lock().await;
@@ -57,15 +56,7 @@ impl<B: Backend + 'static> KnsideRpcServer for RpcServer<B> {
             )
             .await
             .map_err(|err| Error::Custom(err.to_string()))?;
-        let signature = backend
-            .sign_transaction(&digest, payload.private_key.as_bytes())
-            .await
-            .map_err(|err| Error::Custom(err.to_string()))?;
-        let hash = backend
-            .send_transaction_to_ckb(&digest, &signature)
-            .await
-            .map_err(|err| Error::Custom(err.to_string()))?;
-        Ok(hex::encode(hash.unwrap()))
+        Ok(hex::encode(digest))
     }
 
     async fn send_digest_signature(&self, payload: KoSendDigestSignatureParams) -> RpcResult<H256> {
@@ -91,14 +82,19 @@ impl<B: Backend + 'static> KnsideRpcServer for RpcServer<B> {
     }
 
     async fn fetch_global_data(&self) -> RpcResult<String> {
-        println!(" [RPC] receive `fetch_global_data` rpc call");
-        self.ctx
+        let global_data = self
+            .ctx
             .backend
             .lock()
             .await
             .search_global_data(&self.ctx.project_deps)
             .await
-            .map_err(|err| Error::Custom(err.to_string()))
+            .map_err(|err| Error::Custom(err.to_string()));
+        println!(
+            " [RPC] receive `fetch_global_data` rpc call, result = {:?}",
+            global_data
+        );
+        return global_data;
     }
 
     async fn fetch_personal_data(&self, address: String) -> RpcResult<KoFetchPersonalDataResponse> {

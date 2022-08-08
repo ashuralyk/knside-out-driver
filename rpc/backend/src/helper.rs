@@ -62,7 +62,7 @@ pub async fn fetch_live_cells(
         result
             .objects
             .into_iter()
-            .filter(|cell| cell.output.type_.is_none())
+            .filter(|cell| cell.output.type_.is_none() && cell.output_data.is_empty())
             .for_each(|cell| {
                 if inputs_capacity < outputs_capacity {
                     inputs.push(

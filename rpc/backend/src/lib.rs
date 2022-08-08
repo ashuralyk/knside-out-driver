@@ -4,12 +4,10 @@ use std::str::FromStr;
 use ko_protocol::ckb_jsonrpc_types::{OutputsValidator, TransactionView as JsonTxView};
 use ko_protocol::ckb_sdk::rpc::ckb_indexer::{ScriptType, SearchKey, SearchKeyFilter};
 use ko_protocol::ckb_sdk::Address;
-use ko_protocol::ckb_sdk::SECP256K1;
 use ko_protocol::ckb_types::core::{Capacity, TransactionBuilder, TransactionView};
 use ko_protocol::ckb_types::packed::{CellInput, CellOutput, OutPoint, Script, Transaction};
 use ko_protocol::ckb_types::prelude::{Builder, Entity, Pack, Unpack};
 use ko_protocol::ckb_types::{bytes::Bytes, H256};
-use ko_protocol::secp256k1::{Message, SecretKey};
 use ko_protocol::serde_json::to_string;
 use ko_protocol::traits::{Backend, CkbClient};
 use ko_protocol::types::generated::{mol_deployment, mol_flag_0};
@@ -347,6 +345,11 @@ impl<C: CkbClient> Backend for BackendImpl<C> {
         inputs.append(&mut extra_inputs);
 
         // rebuild change output
+        if inputs_capacity < outputs_capacity {
+            return Err(
+                BackendError::InsufficientCapacity(inputs_capacity, outputs_capacity).into(),
+            );
+        }
         let change = inputs_capacity - outputs_capacity;
         outputs[1] = outputs[1]
             .clone()
@@ -391,21 +394,6 @@ impl<C: CkbClient> Backend for BackendImpl<C> {
         } else {
             Ok(None)
         }
-    }
-
-    async fn sign_transaction(&self, digest: &H256, privkey: &[u8]) -> KoResult<[u8; 65]> {
-        let privkey = SecretKey::from_slice(privkey).expect("privkey");
-        let digest = Message::from_slice(digest.as_bytes()).expect("digest");
-        let signature = SECP256K1.sign_recoverable(&digest, &privkey);
-        let signature_bytes = {
-            let (recover_id, signature) = signature.serialize_compact();
-            let mut bytes = signature.to_vec();
-            bytes.push(recover_id.to_i32() as u8);
-            let mut signature = [0u8; 65];
-            signature.copy_from_slice(&bytes);
-            signature
-        };
-        Ok(signature_bytes)
     }
 
     async fn search_global_data(&self, project_deps: &ProjectDeps) -> KoResult<String> {

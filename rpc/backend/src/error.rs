@@ -42,6 +42,9 @@ pub enum BackendError {
 
     #[display(fmt = "Rpc send_transaction error: {}, tx = {}", _0, _1)]
     TransactionSendError(String, String),
+
+    #[display(fmt = "Lack of capacity: {} < {}", _0, _1)]
+    InsufficientCapacity(u64, u64),
 }
 
 impl std::error::Error for BackendError {}

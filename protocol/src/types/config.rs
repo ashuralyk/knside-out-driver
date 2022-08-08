@@ -24,6 +24,13 @@ impl From<&KoCellDep> for CellDep {
 }
 
 #[derive(Deserialize, Debug)]
+pub struct KoDriveConfig {
+    pub drive_interval_sec: u8,
+    pub max_reqeusts_count: u8,
+    pub block_confirms_count: u8,
+}
+
+#[derive(Deserialize, Debug)]
 pub struct KoConfig {
     pub project_type_args: H256,
     pub project_owner_privkey: H256,
@@ -32,6 +39,7 @@ pub struct KoConfig {
     pub ckb_indexer_url: String,
     pub rpc_endpoint: String,
     pub project_cell_deps: Vec<KoCellDep>,
+    pub drive_settings: KoDriveConfig,
 }
 
 impl AsRef<KoConfig> for KoConfig {

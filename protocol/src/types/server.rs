@@ -11,7 +11,6 @@ pub struct KoMakeRequestDigestParams {
     pub sender: String,
     pub payment: String,
     pub contract_call: String,
-    pub private_key: H256,
     pub recipient: Option<String>,
     pub previous_cell: Option<OutPoint>,
 }

@@ -31,7 +31,10 @@ async fn main() -> KoResult<()> {
     // initail drive context
     let privkey =
         SecretKey::from_slice(config.project_owner_privkey.as_bytes()).expect("private key");
-    let context = Context::new(&rpc_client, &privkey, &config.as_ref().into());
+    let context = Context::new(&rpc_client, &privkey, &config.as_ref().into())
+        .set_drive_interval(config.drive_settings.drive_interval_sec)
+        .set_max_requests_count(config.drive_settings.max_reqeusts_count)
+        .set_confirms_count(config.drive_settings.block_confirms_count);
 
     // handle exception operation
     let ctrl_c_handler = tokio::spawn(async {

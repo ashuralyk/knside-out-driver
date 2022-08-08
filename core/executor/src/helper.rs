@@ -13,10 +13,7 @@ use crate::luac;
 
 type ExecuteResult = Vec<KoResult<(Option<Bytes>, Script)>>;
 
-pub fn parse_requests_to_outputs(
-    lua: &Lua,
-    requests: &[KoRequest],
-) -> KoResult<ExecuteResult> {
+pub fn parse_requests_to_outputs(lua: &Lua, requests: &[KoRequest]) -> KoResult<ExecuteResult> {
     let msg: Table = luac!(lua.globals().get("msg"));
     let cost_ckbs = Rc::new(RefCell::new(HashMap::new()));
     let ckbs = cost_ckbs.clone();
