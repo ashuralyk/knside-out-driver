@@ -1032,18 +1032,18 @@ dependencies = [
 ]
 
 [[package]]
-name = "ko-core"
+name = "ko-context"
 version = "0.1.0"
 dependencies = [
- "ko-core-assembler",
- "ko-core-driver",
- "ko-core-executor",
+ "ko-context-assembler",
+ "ko-context-driver",
+ "ko-context-executor",
  "ko-protocol",
  "ko-rpc-client",
 ]
 
 [[package]]
-name = "ko-core-assembler"
+name = "ko-context-assembler"
 version = "0.1.0"
 dependencies = [
  "ko-protocol",
@@ -1051,7 +1051,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "ko-core-driver"
+name = "ko-context-driver"
 version = "0.1.0"
 dependencies = [
  "ckb-hash 0.101.8",
@@ -1059,7 +1059,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "ko-core-executor"
+name = "ko-context-executor"
 version = "0.1.0"
 dependencies = [
  "ko-protocol",
@@ -1072,10 +1072,10 @@ version = "0.1.0"
 dependencies = [
  "clap",
  "ko-config",
- "ko-core",
- "ko-core-assembler",
- "ko-core-driver",
- "ko-core-executor",
+ "ko-context",
+ "ko-context-assembler",
+ "ko-context-driver",
+ "ko-context-executor",
  "ko-protocol",
  "ko-rpc",
  "ko-rpc-client",
@@ -1115,7 +1115,7 @@ name = "ko-rpc-backend"
 version = "0.1.0"
 dependencies = [
  "ckb-hash 0.101.8",
- "ko-core-driver",
+ "ko-context",
  "ko-protocol",
  "ko-rpc-client",
  "mlua",

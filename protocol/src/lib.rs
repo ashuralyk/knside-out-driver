@@ -9,6 +9,7 @@ pub use derive_more;
 pub use hex;
 pub use lazy_static::lazy_static;
 pub use secp256k1;
+pub use serde;
 pub use serde_json;
 pub use tokio;
 

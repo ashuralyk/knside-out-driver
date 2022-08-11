@@ -9,7 +9,9 @@ use ko_protocol::ckb_types::packed::{CellInput, CellOutput, OutPoint, Script, Tr
 use ko_protocol::ckb_types::prelude::{Builder, Entity, Pack, Unpack};
 use ko_protocol::ckb_types::{bytes::Bytes, H256};
 use ko_protocol::serde_json::to_string;
+use ko_protocol::tokio::sync::mpsc::{unbounded_channel, UnboundedReceiver, UnboundedSender};
 use ko_protocol::traits::{Backend, CkbClient};
+use ko_protocol::types::context::KoContextRpcEcho;
 use ko_protocol::types::generated::{mol_deployment, mol_flag_0};
 use ko_protocol::{async_trait, mol_flag_1, mol_flag_2, KoResult, ProjectDeps};
 
@@ -23,13 +25,21 @@ use error::BackendError;
 pub struct BackendImpl<C: CkbClient> {
     rpc_client: C,
     cached_transactions: HashMap<H256, TransactionView>,
+    context_rpc: Option<UnboundedSender<KoContextRpcEcho>>,
+
+    estimate_payment_ckb_sender: UnboundedSender<u64>,
+    estimate_payment_ckb_receiver: UnboundedReceiver<u64>,
 }
 
 impl<C: CkbClient> BackendImpl<C> {
-    pub fn new(rpc_client: &C) -> Self {
+    pub fn new(rpc_client: &C, context: Option<UnboundedSender<KoContextRpcEcho>>) -> Self {
+        let (sender, receiver) = unbounded_channel();
         BackendImpl {
             rpc_client: rpc_client.clone(),
             cached_transactions: HashMap::new(),
+            context_rpc: context,
+            estimate_payment_ckb_sender: sender,
+            estimate_payment_ckb_receiver: receiver,
         }
     }
 
@@ -246,13 +256,12 @@ impl<C: CkbClient> Backend for BackendImpl<C> {
     async fn create_project_request_digest(
         &mut self,
         address: String,
-        payment_ckb: u64,
         recipient: Option<String>,
         previous_cell: Option<OutPoint>,
         function_call: String,
         project_deps: &ProjectDeps,
-    ) -> KoResult<H256> {
-        // build necessary scripts
+    ) -> KoResult<(H256, u64)> {
+        // build neccessary scripts
         let project_type_id =
             helper::recover_type_id_script(project_deps.project_type_args.as_bytes())
                 .calc_script_hash()
@@ -303,6 +312,25 @@ impl<C: CkbClient> Backend for BackendImpl<C> {
                 return Err(BackendError::InvalidPrevousCell.into());
             }
         }
+
+        // request payment ckb of this call
+        let payment_ckb = {
+            if let Some(rpc) = &self.context_rpc {
+                rpc.send(KoContextRpcEcho::EstimatePaymentCkb((
+                    (
+                        secp256k1_script.clone(),
+                        function_call.clone(),
+                        previous_json_data.clone(),
+                        recipient_secp256k1_script.clone(),
+                    ),
+                    self.estimate_payment_ckb_sender.clone(),
+                )))
+                .expect("EstimatePaymentCkb channel request");
+                self.estimate_payment_ckb_receiver.recv().await.unwrap()
+            } else {
+                0u64
+            }
+        };
 
         // build reqeust transaction outputs
         let request_args = mol_flag_2(
@@ -369,7 +397,7 @@ impl<C: CkbClient> Backend for BackendImpl<C> {
         let digest = helper::get_transaction_digest(&tx);
         self.cached_transactions.insert(digest.clone(), tx);
 
-        Ok(digest)
+        Ok((digest, payment_ckb))
     }
 
     async fn send_transaction_to_ckb(

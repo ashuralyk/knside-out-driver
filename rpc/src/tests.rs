@@ -16,7 +16,7 @@ async fn create_server_and_client(with_server: bool) -> HttpClient {
     // start rpc server
     if with_server {
         let rpc_client = RpcClient::new(CKB_URL, CKB_INDEXER_URL);
-        let backend = BackendImpl::new(&rpc_client);
+        let backend = BackendImpl::new(&rpc_client, None);
         let handle =
             RpcServer::<BackendImpl<RpcClient>>::start(JSONRPC_PORT, backend, &PROJECT_VARS)
                 .await
@@ -33,7 +33,6 @@ async fn send_make_request_digest() {
     // send client request
     let params = KoMakeRequestDigestParams {
         sender: OWNER_ADDRESS.into(),
-        payment: "50".into(),
         contract_call: "battle_win()".into(),
         recipient: None,
         previous_cell: None,
@@ -53,7 +52,6 @@ async fn call_contract_method() {
     // make digest
     let params = KoMakeRequestDigestParams {
         sender: OWNER_ADDRESS.into(),
-        payment: "0".into(),
         contract_call: "battle_win()".into(),
         recipient: None,
         previous_cell: None,

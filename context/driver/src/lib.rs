@@ -4,13 +4,13 @@ use std::vec;
 use ckb_hash::new_blake2b;
 use ko_protocol::ckb_jsonrpc_types::{OutputsValidator, Status, TransactionView as JsonTxView};
 use ko_protocol::ckb_sdk::SECP256K1;
-use ko_protocol::ckb_types::packed::{CellDep, OutPoint, WitnessArgs};
+use ko_protocol::ckb_types::packed::WitnessArgs;
 use ko_protocol::ckb_types::prelude::{Builder, Entity, Pack};
 use ko_protocol::ckb_types::{bytes::Bytes, core::TransactionView, H256};
 use ko_protocol::secp256k1::{Message, SecretKey};
 use ko_protocol::serde_json::to_string;
 use ko_protocol::traits::{CkbClient, Driver};
-use ko_protocol::{async_trait, tokio, types::config::KoCellDep, KoResult};
+use ko_protocol::{async_trait, tokio, KoResult};
 
 mod error;
 use error::DriverError;
@@ -31,33 +31,6 @@ impl<C: CkbClient> DriverImpl<C> {
 
 #[async_trait]
 impl<C: CkbClient> Driver for DriverImpl<C> {
-    async fn prepare_ko_transaction_normal_celldeps(
-        &self,
-        project_cell_deps: &[KoCellDep],
-    ) -> KoResult<Vec<CellDep>> {
-        let mut cell_deps = vec![];
-        for celldep in project_cell_deps {
-            self.rpc_client
-                .get_transaction(&celldep.transaction_hash)
-                .await
-                .map_err(|err| {
-                    DriverError::ErrorFetchingCelldepTransaction(
-                        err.to_string(),
-                        celldep.transaction_hash.clone(),
-                    )
-                })?;
-            let cell_dep = CellDep::new_builder()
-                .out_point(OutPoint::new(
-                    celldep.transaction_hash.pack(),
-                    celldep.cell_index,
-                ))
-                .dep_type(celldep.dep_type.into())
-                .build();
-            cell_deps.push(cell_dep);
-        }
-        Ok(cell_deps)
-    }
-
     fn sign_ko_transaction(&self, tx: &TransactionView) -> Bytes {
         let mut blake2b = new_blake2b();
         blake2b.update(&tx.hash().raw_data());

@@ -1,3 +1,6 @@
+use std::cell::RefCell;
+use std::rc::Rc;
+
 use ko_protocol::ckb_types::bytes::Bytes;
 use ko_protocol::ckb_types::H256;
 use ko_protocol::derive_more::Constructor;
@@ -20,19 +23,19 @@ macro_rules! luac {
 #[derive(Constructor)]
 pub struct ExecutorImpl {}
 
-impl Executor for ExecutorImpl {
-    fn execute_lua_requests(
+impl ExecutorImpl {
+    fn prepare_lua_context(
         &self,
         global_json_data: &Bytes,
         project_owner: &H256,
-        user_requests: &[KoRequest],
         project_lua_code: &Bytes,
-    ) -> KoResult<KoExecuteReceipt> {
-        let lua = Lua::new();
+    ) -> KoResult<Lua> {
         // initialize project lua code
+        let lua = Lua::new();
         lua.load(&project_lua_code.to_vec())
             .exec()
             .map_err(|err| ExecutorError::ErrorLoadProjectLuaCode(err.to_string()))?;
+
         // prepare global context `msg`
         let msg = luac!(lua.create_table());
         luac!(msg.set("owner", hex::encode(project_owner.as_bytes())));
@@ -45,8 +48,24 @@ impl Executor for ExecutorImpl {
         };
         luac!(msg.set("global", global_table));
         luac!(lua.globals().set("msg", msg));
+
+        Ok(lua)
+    }
+}
+
+impl Executor for ExecutorImpl {
+    fn execute_lua_requests(
+        &self,
+        global_json_data: &Bytes,
+        project_owner: &H256,
+        user_requests: &[KoRequest],
+        project_lua_code: &Bytes,
+    ) -> KoResult<KoExecuteReceipt> {
+        let lua = self.prepare_lua_context(global_json_data, project_owner, project_lua_code)?;
+
         // running each user function_call requests
         let personal_outputs = helper::parse_requests_to_outputs(&lua, user_requests)?;
+
         // make final global json string
         let global_json_data = {
             let msg: Table = luac!(lua.globals().get("msg"));
@@ -54,8 +73,36 @@ impl Executor for ExecutorImpl {
             let data = serde_json::to_string(&global_table).unwrap();
             Bytes::from(data.as_bytes().to_vec())
         };
+
         // collect results to execution receipt
         let receipt = KoExecuteReceipt::new(global_json_data, personal_outputs);
         Ok(receipt)
+    }
+
+    fn estimate_payment_ckb(
+        &self,
+        global_json_data: &Bytes,
+        project_owner: &H256,
+        request: KoRequest,
+        project_lua_code: &Bytes,
+    ) -> KoResult<u64> {
+        let lua = self.prepare_lua_context(global_json_data, project_owner, project_lua_code)?;
+
+        // prepare payment ckb catcher
+        let msg: Table = luac!(lua.globals().get("msg"));
+        let payment_ckb = Rc::new(RefCell::new(0u64));
+        let payment = payment_ckb.clone();
+        let ckb_cost = luac!(lua.create_function(move |_, ckb: u64| {
+            *payment.borrow_mut() = ckb;
+            Ok(true)
+        }));
+        luac!(msg.set("ckb_cost", ckb_cost));
+        luac!(lua.globals().set("msg", msg));
+
+        // run request and trigger ckb_cost function if it exists
+        helper::run_request(&lua, &request, 0)?;
+
+        // get payment ckb cost
+        Ok(payment_ckb.take())
     }
 }

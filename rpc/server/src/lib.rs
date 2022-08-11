@@ -1,5 +1,4 @@
 use std::net::SocketAddr;
-use std::str::FromStr;
 use std::sync::Arc;
 
 use jsonrpsee::http_server::{HttpServerBuilder, HttpServerHandle};
@@ -19,7 +18,10 @@ type RpcResult<T> = Result<T, Error>;
 #[rpc(server)]
 trait KnsideRpc {
     #[method(name = "make_request_digest")]
-    async fn make_request_digest(&self, payload: KoMakeRequestDigestParams) -> RpcResult<String>;
+    async fn make_request_digest(
+        &self,
+        payload: KoMakeRequestDigestParams,
+    ) -> RpcResult<KoMakeRequestDigestResponse>;
 
     #[method(name = "send_digest_signature")]
     async fn send_digest_signature(&self, payload: KoSendDigestSignatureParams) -> RpcResult<H256>;
@@ -38,17 +40,18 @@ pub struct RpcServer<B: Backend + 'static> {
 // define all of rpc methods here
 #[async_trait]
 impl<B: Backend + 'static> KnsideRpcServer for RpcServer<B> {
-    async fn make_request_digest(&self, payload: KoMakeRequestDigestParams) -> RpcResult<String> {
+    async fn make_request_digest(
+        &self,
+        payload: KoMakeRequestDigestParams,
+    ) -> RpcResult<KoMakeRequestDigestResponse> {
         println!(
             " [RPC] receive `make_request_digest` rpc call <= {}: {}",
             payload.sender, payload.contract_call
         );
-        let payment = HumanCapacity::from_str(&payload.payment).map_err(Error::Custom)?;
         let mut backend = self.ctx.backend.lock().await;
-        let digest = backend
+        let (digest, payment_ckb) = backend
             .create_project_request_digest(
                 payload.sender,
-                payment.0,
                 payload.recipient,
                 payload.previous_cell.map(|v| v.into()),
                 payload.contract_call,
@@ -56,7 +59,11 @@ impl<B: Backend + 'static> KnsideRpcServer for RpcServer<B> {
             )
             .await
             .map_err(|err| Error::Custom(err.to_string()))?;
-        Ok(hex::encode(digest))
+        let result = KoMakeRequestDigestResponse::new(
+            hex::encode(&digest),
+            HumanCapacity::from(payment_ckb).to_string(),
+        );
+        Ok(result)
     }
 
     async fn send_digest_signature(&self, payload: KoSendDigestSignatureParams) -> RpcResult<H256> {

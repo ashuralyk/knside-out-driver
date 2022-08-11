@@ -38,6 +38,10 @@ impl<C: CkbClient> AssemblerImpl<C> {
             project_code_hash: project_deps.project_code_hash.clone(),
         }
     }
+
+    pub fn get_project_id(&self) -> H256 {
+        self.project_id.clone()
+    }
 }
 
 #[async_trait]

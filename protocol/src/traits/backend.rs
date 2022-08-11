@@ -21,12 +21,11 @@ pub trait Backend: Send + Sync {
     async fn create_project_request_digest(
         &mut self,
         address: String,
-        payment_ckb: u64,
         recipient: Option<String>,
         previous_cell: Option<OutPoint>,
         function_call: String,
         project_deps: &ProjectDeps,
-    ) -> KoResult<H256>;
+    ) -> KoResult<(H256, u64)>;
 
     async fn send_transaction_to_ckb(
         &mut self,

@@ -12,4 +12,12 @@ pub trait Executor {
         user_requests: &[KoRequest],
         project_lua_code: &Bytes,
     ) -> KoResult<KoExecuteReceipt>;
+
+    fn estimate_payment_ckb(
+        &self,
+        global_json_data: &Bytes,
+        project_owner: &H256,
+        request: KoRequest,
+        project_lua_code: &Bytes,
+    ) -> KoResult<u64>;
 }

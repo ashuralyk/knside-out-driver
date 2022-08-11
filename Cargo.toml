@@ -9,20 +9,20 @@ edition = "2021"
 clap = { version = "3.1", features = ["cargo"] }
 
 ko-config = { path = "./config" }
-ko-core = { path = "./core" }
-ko-core-assembler = { path = "./core/assembler" }
-ko-core-driver = { path = "./core/driver" }
-ko-core-executor = { path = "./core/executor" }
+ko-context = { path = "./context" }
+ko-context-assembler = { path = "./context/assembler" }
+ko-context-driver = { path = "./context/driver" }
+ko-context-executor = { path = "./context/executor" }
 ko-protocol = { path = "./protocol" }
 ko-rpc = { path = "./rpc" }
 ko-rpc-client = { path = "./rpc/client" }
 
 [workspace]
 members = [
-    "core",
-    "core/assembler",
-    "core/driver",
-    "core/executor",
+    "context",
+    "context/assembler",
+    "context/driver",
+    "context/executor",
     
     "protocol",
 

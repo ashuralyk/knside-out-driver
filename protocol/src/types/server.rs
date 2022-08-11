@@ -9,10 +9,15 @@ use crate::{traits::Backend, ProjectDeps};
 #[derive(Deserialize, Serialize)]
 pub struct KoMakeRequestDigestParams {
     pub sender: String,
-    pub payment: String,
     pub contract_call: String,
     pub recipient: Option<String>,
     pub previous_cell: Option<OutPoint>,
+}
+
+#[derive(Deserialize, Serialize, Constructor)]
+pub struct KoMakeRequestDigestResponse {
+    pub digest: String,
+    pub payment: String,
 }
 
 #[derive(Deserialize, Serialize)]

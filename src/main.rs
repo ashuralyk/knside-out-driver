@@ -1,6 +1,6 @@
 use clap::{crate_version, Arg, Command};
-use ko_core::Context;
-use ko_protocol::{secp256k1::SecretKey, tokio, KoResult};
+use ko_context::ContextImpl;
+use ko_protocol::{secp256k1::SecretKey, tokio, traits::Context, KoResult, ProjectDeps};
 use ko_rpc::RpcServerRuntime;
 use ko_rpc_client::RpcClient;
 
@@ -21,46 +21,30 @@ async fn main() -> KoResult<()> {
 
     let config_path = matches.value_of("config_path").unwrap();
     let config = ko_config::load_file(config_path)?;
+    let project_deps: &ProjectDeps = &config.as_ref().into();
 
     // initail CKB rcp client
     let rpc_client = RpcClient::new(&config.ckb_url, &config.ckb_indexer_url);
 
-    // start rpc server
-    RpcServerRuntime::run(&config.rpc_endpoint, &rpc_client, &config.as_ref().into()).await?;
-
     // initail drive context
     let privkey =
         SecretKey::from_slice(config.project_owner_privkey.as_bytes()).expect("private key");
-    let context = Context::new(&rpc_client, &privkey, &config.as_ref().into())
-        .set_drive_interval(config.drive_settings.drive_interval_sec)
-        .set_max_requests_count(config.drive_settings.max_reqeusts_count)
-        .set_confirms_count(config.drive_settings.block_confirms_count);
+    let (mut driver, context_sender) =
+        ContextImpl::new(&rpc_client, &privkey, &config.as_ref().into());
+    driver.set_drive_interval(config.drive_settings.drive_interval_sec);
+    driver.set_max_requests_count(config.drive_settings.max_reqeusts_count);
+    driver.set_confirms_count(config.drive_settings.block_confirms_count);
 
-    // handle exception operation
-    let ctrl_c_handler = tokio::spawn(async {
-        #[cfg(windows)]
-        let _ = tokio::signal::ctrl_c().await;
-        #[cfg(unix)]
-        {
-            use tokio::signal::unix;
-            let mut sigtun_int = unix::signal(unix::SignalKind::interrupt()).unwrap();
-            let mut sigtun_term = unix::signal(unix::SignalKind::terminate()).unwrap();
-            tokio::select! {
-                _ = sigtun_int.recv() => {}
-                _ = sigtun_term.recv() => {}
-            };
-        }
-    });
+    // start rpc server
+    RpcServerRuntime::run(
+        &config.rpc_endpoint,
+        &rpc_client,
+        context_sender,
+        project_deps,
+    )
+    .await?;
 
-    // enter drive loop, will stop when any type of error throwed out
-    tokio::select! {
-        _ = ctrl_c_handler => {
-            println!("<Ctrl-C> is on call, quit knside-out drive loop");
-        },
-        Err(error) = context.start(&config.project_cell_deps) => {
-            println!("[ERROR] {}", error);
-        }
-    }
-
+    // start drive loop
+    driver.run(&project_deps.project_cell_deps).await;
     Ok(())
 }

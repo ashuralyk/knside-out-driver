@@ -12,5 +12,5 @@ mlua = { version = "0.8", features = ["lua54", "serialize", "vendored"] }
 ko-protocol = { path = "../../protocol" }
 
 [dev-dependencies]
-ko-core-driver = { path = "../../core/driver" }
+ko-context = { path = "../../context" }
 ko-rpc-client = { path = "../../rpc/client" }

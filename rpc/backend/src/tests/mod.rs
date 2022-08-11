@@ -1,9 +1,7 @@
-use ko_core_driver::DriverImpl;
+use ko_context::ContextImpl;
 use ko_protocol::ckb_jsonrpc_types::TransactionView as JsonTxView;
 use ko_protocol::ckb_types::bytes::Bytes;
-use ko_protocol::ckb_types::core::{Capacity, DepType, TransactionView};
-use ko_protocol::ckb_types::packed::WitnessArgs;
-use ko_protocol::ckb_types::prelude::{Builder, Entity, Pack};
+use ko_protocol::ckb_types::core::{DepType, TransactionView};
 use ko_protocol::secp256k1::SecretKey;
 use ko_protocol::traits::{Backend, CkbClient, Driver};
 use ko_protocol::types::config::KoCellDep;
@@ -12,46 +10,19 @@ use ko_rpc_client::RpcClient;
 
 use crate::BackendImpl;
 
-fn sign(rpc_client: &impl CkbClient, tx: TransactionView) -> [u8; 65] {
+fn sign(ctx: &ContextImpl<impl CkbClient>, tx: TransactionView) -> [u8; 65] {
     println!(
         "tx = {}",
         serde_json::to_string_pretty(&JsonTxView::from(tx.clone())).unwrap()
     );
     // sign transaction
-    let privkey = SecretKey::from_slice(OWNER_PRIVATE_KEY.as_bytes()).unwrap();
-    let driver = DriverImpl::new(rpc_client, &privkey);
     let signature = {
         let mut bytes = [0u8; 65];
-        let signature = driver.sign_ko_transaction(&tx);
+        let signature = ctx.driver.sign_ko_transaction(&tx);
         bytes.copy_from_slice(&signature);
         bytes
     };
     signature
-}
-
-#[allow(unused)]
-async fn sign_and_push(rpc_client: &impl CkbClient, tx: TransactionView) {
-    let privkey = SecretKey::from_slice(OWNER_PRIVATE_KEY.as_bytes()).unwrap();
-    let driver = DriverImpl::new(rpc_client, &privkey);
-    let signature = driver.sign_ko_transaction(&tx);
-
-    // set witnesses
-    let witness = WitnessArgs::new_builder()
-        .lock(Some(signature).pack())
-        .build()
-        .as_bytes();
-    let tx = tx
-        .as_advanced_builder()
-        .witnesses(vec![witness].pack())
-        .build();
-    println!(
-        "tx = {}",
-        serde_json::to_string_pretty(&JsonTxView::from(tx.clone())).unwrap()
-    );
-
-    // send knside-out transaction to CKB
-    let hash = driver.send_ko_transaction(tx).await.expect("send tx");
-    println!("send success, hash = {}", hash);
 }
 
 #[tokio::test]
@@ -65,7 +36,9 @@ async fn deploy_project_deployment_cell() {
 
     // create digest
     let rpc_client = RpcClient::new(CKB_URL, CKB_INDEXER_URL);
-    let mut backend = BackendImpl::new(&rpc_client);
+    let privkey = SecretKey::from_slice(OWNER_PRIVATE_KEY.as_bytes()).unwrap();
+    let (context, _) = ContextImpl::new(&rpc_client, &privkey, &PROJECT_VARS);
+    let mut backend = BackendImpl::new(&rpc_client, None);
     let (digest, type_args) = backend
         .create_project_deploy_digest(
             Bytes::from(lua_code.as_bytes().to_vec()),
@@ -78,14 +51,13 @@ async fn deploy_project_deployment_cell() {
 
     // sign and push transaction
     let tx = backend.peak_transaction(&digest).expect("peak");
-    let signature = sign(&rpc_client, tx);
+    let signature = sign(&context, tx);
     let hash = backend
         .send_transaction_to_ckb(&digest, &signature)
         .await
         .expect("send")
         .unwrap();
     println!("send success, hash = {}", hash);
-    // sign_and_push(&rpc_client, tx).await;
 }
 
 #[tokio::test]
@@ -99,7 +71,9 @@ async fn update_project_deployment_cell() {
 
     // create digest
     let rpc_client = RpcClient::new(CKB_URL, CKB_INDEXER_URL);
-    let mut backend = BackendImpl::new(&rpc_client);
+    let privkey = SecretKey::from_slice(OWNER_PRIVATE_KEY.as_bytes()).unwrap();
+    let (context, _) = ContextImpl::new(&rpc_client, &privkey, &PROJECT_VARS);
+    let mut backend = BackendImpl::new(&rpc_client, None);
     let digest = backend
         .create_project_update_digest(
             Bytes::from(lua_code.as_bytes().to_vec()),
@@ -111,14 +85,13 @@ async fn update_project_deployment_cell() {
 
     // sign and push transaction
     let tx = backend.peak_transaction(&digest).expect("peak");
-    let signature = sign(&rpc_client, tx);
+    let signature = sign(&context, tx);
     let hash = backend
         .send_transaction_to_ckb(&digest, &signature)
         .await
         .expect("send")
         .unwrap();
     println!("send success, hash = {}", hash);
-    // sign_and_push(&rpc_client, tx).await;
 }
 
 #[tokio::test]
@@ -130,7 +103,9 @@ async fn request_project_request_cell() {
     let project_deps = ProjectDeps::new(&PROJECT_CODE_HASH, &PROJECT_TYPE_ARGS, &cell_deps);
 
     let rpc_client = RpcClient::new(CKB_URL, CKB_INDEXER_URL);
-    let mut backend = BackendImpl::new(&rpc_client);
+    let privkey = SecretKey::from_slice(OWNER_PRIVATE_KEY.as_bytes()).unwrap();
+    let (context, _) = ContextImpl::new(&rpc_client, &privkey, &PROJECT_VARS);
+    let mut backend = BackendImpl::new(&rpc_client, None);
     let mut previous_cell = None;
     let function_call = "battle_win()".into();
     if function_call == "claim_nfts" {
@@ -148,11 +123,11 @@ async fn request_project_request_cell() {
         };
     }
     println!("previous = {:?}", previous_cell);
+
     // create digest
-    let digest = backend
+    let (digest, payment_ckb) = backend
         .create_project_request_digest(
             OWNER_ADDRESS.into(),
-            Capacity::bytes(200).unwrap().as_u64(),
             None,
             previous_cell,
             function_call,
@@ -160,27 +135,24 @@ async fn request_project_request_cell() {
         )
         .await
         .expect("create digest");
+    println!("payment_ckb = {}", payment_ckb);
 
     // sign and push transaction
     let tx = backend.peak_transaction(&digest).expect("peak");
-    let signature = sign(&rpc_client, tx);
+    let signature = sign(&context, tx);
     let hash = backend
         .send_transaction_to_ckb(&digest, &signature)
         .await
         .expect("send")
         .unwrap();
     println!("send success, hash = {}", hash);
-    // sign_and_push(&rpc_client, tx).await;
 }
 
 #[tokio::test]
 async fn fetch_global_json_data() {
-    let project_deps = ProjectDeps::new(&PROJECT_CODE_HASH, &PROJECT_TYPE_ARGS, &vec![]);
-
     let rpc_client = RpcClient::new(CKB_URL, CKB_INDEXER_URL);
-    let backend = BackendImpl::new(&rpc_client);
-    let global_data = backend
-        .search_global_data(&project_deps)
+    let global_data = BackendImpl::new(&rpc_client, None)
+        .search_global_data(&PROJECT_VARS)
         .await
         .expect("search global");
     println!("global_data = {}", global_data);
@@ -188,11 +160,9 @@ async fn fetch_global_json_data() {
 
 #[tokio::test]
 async fn fetch_personal_json_data() {
-    let project_deps = ProjectDeps::new(&PROJECT_CODE_HASH, &PROJECT_TYPE_ARGS, &vec![]);
     let rpc_client = RpcClient::new(CKB_URL, CKB_INDEXER_URL);
-    let backend = BackendImpl::new(&rpc_client);
-    let personal_data = backend
-        .search_personal_data(OWNER_ADDRESS.into(), &project_deps)
+    let personal_data = BackendImpl::new(&rpc_client, None)
+        .search_personal_data(OWNER_ADDRESS.into(), &PROJECT_VARS)
         .await
         .expect("search personal");
     personal_data.into_iter().for_each(|(data, outpoint)| {
