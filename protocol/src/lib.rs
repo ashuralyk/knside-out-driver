@@ -66,13 +66,22 @@ pub mod TestVars {
 
     pub const PROJECT_CODE_HASH: H256 =
         h256!("0x8f11b7a80bb50a518cd29170cbc72b2ab8ef94fc8297f75cfa9f8917d5057e4b");
-    pub const PROJECT_TYPE_ARGS: H256 =
-        h256!("0x3fd9221c7ca05c98b3bd8247adf3291212ed1663a131752174981e98f994da4d");
 
+    // testnet
+    // pub const PROJECT_TYPE_ARGS: H256 =
+    //     h256!("0x3fd9221c7ca05c98b3bd8247adf3291212ed1663a131752174981e98f994da4d");
+    // pub const SECP256K1_TX_HASH: H256 =
+    //     h256!("0xf8de3bb47d055cdf460d93a2a6e1b05f7432f9777c8c474abf4eec1d4aee5d37");
+    // pub const KNSIDEOUT_TX_HASH: H256 =
+    //     h256!("0x2bec96b9d22f3c72ad75423395aa8d5ad3881cf13bfbf1ffbf8a4bd7994621e7");
+
+    // devnet
+    pub const PROJECT_TYPE_ARGS: H256 =
+        h256!("0x71fee700e9468246fa4aa10dd37248d673dd36ee73689ad0c3592c89d6b599c6");
     pub const SECP256K1_TX_HASH: H256 =
-        h256!("0xf8de3bb47d055cdf460d93a2a6e1b05f7432f9777c8c474abf4eec1d4aee5d37");
+        h256!("0xc6bffa9ca9a9dadfec83c0307eee18fe88e42a00d05068510d799e3e4ad3ee87");
     pub const KNSIDEOUT_TX_HASH: H256 =
-        h256!("0x2bec96b9d22f3c72ad75423395aa8d5ad3881cf13bfbf1ffbf8a4bd7994621e7");
+        h256!("0xb769ef9ccc18b5a883a4a44f31217036458be38dbef874a10e69d8f5b0f322a0");
 
     lazy_static! {
         pub static ref PROJECT_VARS: ProjectDeps = ProjectDeps::new(

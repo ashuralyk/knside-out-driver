@@ -1,11 +1,10 @@
 use ko_context::ContextImpl;
 use ko_protocol::ckb_jsonrpc_types::TransactionView as JsonTxView;
 use ko_protocol::ckb_types::bytes::Bytes;
-use ko_protocol::ckb_types::core::{DepType, TransactionView};
+use ko_protocol::ckb_types::core::{TransactionView};
 use ko_protocol::secp256k1::SecretKey;
 use ko_protocol::traits::{Backend, CkbClient, Driver};
-use ko_protocol::types::config::KoCellDep;
-use ko_protocol::{serde_json, tokio, ProjectDeps, TestVars::*};
+use ko_protocol::{serde_json, tokio, TestVars::*};
 use ko_rpc_client::RpcClient;
 
 use crate::BackendImpl;
@@ -28,11 +27,6 @@ fn sign(ctx: &ContextImpl<impl CkbClient>, tx: TransactionView) -> [u8; 65] {
 #[tokio::test]
 async fn deploy_project_deployment_cell() {
     let lua_code = std::fs::read_to_string("./src/tests/21-point.lua").unwrap();
-    let cell_deps = vec![
-        KoCellDep::new(SECP256K1_TX_HASH.clone(), 0, DepType::DepGroup.into()),
-        KoCellDep::new(KNSIDEOUT_TX_HASH.clone(), 0, DepType::Code.into()),
-    ];
-    let project_deps = ProjectDeps::new(&PROJECT_CODE_HASH, &PROJECT_TYPE_ARGS, &cell_deps);
 
     // create digest
     let rpc_client = RpcClient::new(CKB_URL, CKB_INDEXER_URL);
@@ -43,7 +37,7 @@ async fn deploy_project_deployment_cell() {
         .create_project_deploy_digest(
             Bytes::from(lua_code.as_bytes().to_vec()),
             OWNER_ADDRESS.into(),
-            &project_deps,
+            &PROJECT_VARS,
         )
         .await
         .expect("create digest");
@@ -63,11 +57,6 @@ async fn deploy_project_deployment_cell() {
 #[tokio::test]
 async fn update_project_deployment_cell() {
     let lua_code = std::fs::read_to_string("./src/tests/21-point.lua").unwrap();
-    let cell_deps = vec![
-        KoCellDep::new(SECP256K1_TX_HASH.clone(), 0, DepType::DepGroup.into()),
-        KoCellDep::new(KNSIDEOUT_TX_HASH.clone(), 0, DepType::Code.into()),
-    ];
-    let project_deps = ProjectDeps::new(&PROJECT_CODE_HASH, &PROJECT_TYPE_ARGS, &cell_deps);
 
     // create digest
     let rpc_client = RpcClient::new(CKB_URL, CKB_INDEXER_URL);
@@ -78,7 +67,7 @@ async fn update_project_deployment_cell() {
         .create_project_update_digest(
             Bytes::from(lua_code.as_bytes().to_vec()),
             OWNER_ADDRESS.into(),
-            &project_deps,
+            &PROJECT_VARS,
         )
         .await
         .expect("create digest");
@@ -96,12 +85,6 @@ async fn update_project_deployment_cell() {
 
 #[tokio::test]
 async fn request_project_request_cell() {
-    let cell_deps = vec![
-        KoCellDep::new(SECP256K1_TX_HASH.clone(), 0, DepType::DepGroup.into()),
-        KoCellDep::new(KNSIDEOUT_TX_HASH.clone(), 0, DepType::Code.into()),
-    ];
-    let project_deps = ProjectDeps::new(&PROJECT_CODE_HASH, &PROJECT_TYPE_ARGS, &cell_deps);
-
     let rpc_client = RpcClient::new(CKB_URL, CKB_INDEXER_URL);
     let privkey = SecretKey::from_slice(OWNER_PRIVATE_KEY.as_bytes()).unwrap();
     let (context, _) = ContextImpl::new(&rpc_client, &privkey, &PROJECT_VARS);
@@ -111,7 +94,7 @@ async fn request_project_request_cell() {
     if function_call == "claim_nfts" {
         // search previous personal cell
         let personal_data = backend
-            .search_personal_data(OWNER_ADDRESS.into(), &project_deps)
+            .search_personal_data(OWNER_ADDRESS.into(), &PROJECT_VARS)
             .await
             .expect("search personal");
         previous_cell = {
@@ -131,7 +114,7 @@ async fn request_project_request_cell() {
             None,
             previous_cell,
             function_call,
-            &project_deps,
+            &PROJECT_VARS,
         )
         .await
         .expect("create digest");
