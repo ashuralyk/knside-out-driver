@@ -43,7 +43,7 @@ impl ExecutorImpl {
             let json_string = String::from_utf8(global_json_data.to_vec())
                 .map_err(|_| ExecutorError::InvalidUTF8FormatForGlobalData)?;
             let value: serde_json::Value = serde_json::from_str(&json_string)
-                .map_err(|_| ExecutorError::InvalidJsonFormatForGlobalData)?;
+                .map_err(|_| ExecutorError::InvalidJsonFormatForGlobalData(json_string))?;
             luac!(lua.to_value(&value))
         };
         luac!(msg.set("global", global_table));

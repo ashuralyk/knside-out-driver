@@ -12,8 +12,11 @@ pub enum RpcServerError {
     #[display(fmt = "Start rpc server failed, reason = {}", _0)]
     ErrorStartRpcServer(String),
 
+    #[display(fmt = "Signature is not HEX format")]
+    InvalidSignatureHexBytes,
+
     #[display(fmt = "Invalid signature len {}, expect 65", _0)]
-    InvalidSignatureLen(usize),
+    InvalidSignatureLength(usize),
 
     SendSignature,
 }

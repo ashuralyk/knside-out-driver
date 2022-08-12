@@ -78,11 +78,14 @@ impl<C: CkbClient> ContextImpl<C> {
         let mut transaction_deps = project_cell_deps.to_vec();
         transaction_deps.insert(0, project_dep.cell_dep);
 
-        let original_interval = self.drive_interval;
-        self.drive_interval = Duration::ZERO;
+        let (project_owner, global_data) = self.assembler.get_project_owner_and_global().await?;
         self.project_context.contract_code = project_dep.lua_code.clone();
+        self.project_context.owner_lockhash = project_owner;
+        self.project_context.global_json_data = global_data;
 
         println!("[INFO] knside-out drive server started, enter drive loop");
+        let startup_interval = self.drive_interval;
+        self.drive_interval = Duration::ZERO;
         loop {
             tokio::select! {
                 _ = tokio::time::sleep(self.drive_interval) => {
@@ -100,7 +103,7 @@ impl<C: CkbClient> ContextImpl<C> {
                             .await?;
                         self.drive_interval = Duration::ZERO;
                     } else {
-                        self.drive_interval = original_interval;
+                        self.drive_interval = startup_interval;
                     }
                 }
 
@@ -226,32 +229,10 @@ impl<C: CkbClient> Context for ContextImpl<C> {
 
     async fn run(mut self, project_cell_deps: &[CellDep]) {
         loop {
-            // handle exception operation
-            let ctrl_c_handler = async {
-                #[cfg(windows)]
-                let _ = tokio::signal::ctrl_c().await;
-                #[cfg(unix)]
-                {
-                    use tokio::signal::unix;
-                    let mut sigtun_int = unix::signal(unix::SignalKind::interrupt()).unwrap();
-                    let mut sigtun_term = unix::signal(unix::SignalKind::terminate()).unwrap();
-                    tokio::select! {
-                        _ = sigtun_int.recv() => {}
-                        _ = sigtun_term.recv() => {}
-                    };
-                }
-            };
-
-            // enter drive loop, will stop when any type of error throwed out
-            tokio::select! {
-                _ = ctrl_c_handler => {
-                    println!("<Ctrl-C> is on call, quit knside-out drive loop");
-                    break;
-                },
-                Err(error) = self.start_drive_loop(project_cell_deps) => {
-                    println!("[ERROR] {}", error);
-                }
+            if let Err(error) = self.start_drive_loop(project_cell_deps).await {
+                println!("[ERROR] {}", error);
             }
+            tokio::time::sleep(self.drive_interval).await;
         }
     }
 }

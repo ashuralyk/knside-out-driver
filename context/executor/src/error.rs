@@ -10,8 +10,8 @@ pub enum ExecutorError {
     #[display(fmt = "Global data is not UTF-8 format")]
     InvalidUTF8FormatForGlobalData,
 
-    #[display(fmt = "Global data is not a JSON string")]
-    InvalidJsonFormatForGlobalData,
+    #[display(fmt = "Global data is not a JSON string, value = {}", _0)]
+    InvalidJsonFormatForGlobalData(String),
 
     #[display(fmt = "Personal data is not UTF-8 format")]
     InvalidUTF8FormatForPersonalData,

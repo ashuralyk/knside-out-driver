@@ -14,7 +14,7 @@ pub struct KoMakeRequestDigestParams {
     pub previous_cell: Option<OutPoint>,
 }
 
-#[derive(Deserialize, Serialize, Constructor)]
+#[derive(Deserialize, Serialize, Constructor, Debug)]
 pub struct KoMakeRequestDigestResponse {
     pub digest: String,
     pub payment: String,

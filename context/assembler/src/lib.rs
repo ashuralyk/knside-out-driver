@@ -42,6 +42,15 @@ impl<C: CkbClient> AssemblerImpl<C> {
     pub fn get_project_id(&self) -> H256 {
         self.project_id.clone()
     }
+
+    pub async fn get_project_owner_and_global(&self) -> KoResult<(H256, Bytes)> {
+        let global_cell =
+            helper::search_global_cell(&self.rpc_client, &self.project_code_hash, &self.project_id)
+                .await?;
+        let project_owner = global_cell.output.lock().calc_script_hash().unpack();
+        let project_global_data = global_cell.output_data;
+        Ok((project_owner, project_global_data))
+    }
 }
 
 #[async_trait]

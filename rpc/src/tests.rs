@@ -37,7 +37,7 @@ async fn send_make_request_digest() {
         recipient: None,
         previous_cell: None,
     };
-    let response: String = create_server_and_client(false)
+    let response: KoMakeRequestDigestResponse = create_server_and_client(false)
         .await
         .request("make_request_digest", rpc_params!(params))
         .await
@@ -57,11 +57,12 @@ async fn call_contract_method() {
         previous_cell: None,
     };
     let digest = {
-        let digest: String = client
+        let response: KoMakeRequestDigestResponse = client
             .request("make_request_digest", rpc_params!(params))
             .await
             .expect("server response");
-        H256::from_str(format!("0x{}", digest).as_str()).expect("digest")
+        println!("payment_ckb = {}", response.payment);
+        H256::from_str(response.digest.as_str()).expect("digest")
     };
     // sign transaction
     let privkey = SecretKey::from_slice(OWNER_PRIVATE_KEY.as_bytes()).expect("privkey");

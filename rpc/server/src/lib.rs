@@ -45,7 +45,7 @@ impl<B: Backend + 'static> KnsideRpcServer for RpcServer<B> {
         payload: KoMakeRequestDigestParams,
     ) -> RpcResult<KoMakeRequestDigestResponse> {
         println!(
-            " [RPC] receive `make_request_digest` rpc call <= {}: {}",
+            " [RPC] receive `make_request_digest` rpc call <= {}({})",
             payload.sender, payload.contract_call
         );
         let mut backend = self.ctx.backend.lock().await;
@@ -67,22 +67,26 @@ impl<B: Backend + 'static> KnsideRpcServer for RpcServer<B> {
     }
 
     async fn send_digest_signature(&self, payload: KoSendDigestSignatureParams) -> RpcResult<H256> {
-        let mut sig = [0u8; 65];
-        let payload_signature = payload.signature.as_bytes();
+        println!(
+            " [RPC] receive `send_digest_signature` rpc call <= digest({})", payload.digest
+        );
 
-        if payload_signature.len() != 65 {
+        let signature = hex::decode(payload.signature).map_err(|_| {
+            Error::Call(CallError::InvalidParams(RpcServerError::InvalidSignatureHexBytes.into()))
+        })?;
+        if signature.len() != 65 {
             return Err(Error::Call(CallError::InvalidParams(
-                RpcServerError::InvalidSignatureLen(payload_signature.len()).into(),
+                RpcServerError::InvalidSignatureLength(signature.len()).into(),
             )));
         }
-
-        sig.copy_from_slice(payload_signature);
+        let mut signature_bytes = [0u8; 65];
+        signature_bytes.copy_from_slice(&signature);
 
         self.ctx
             .backend
             .lock()
             .await
-            .send_transaction_to_ckb(&payload.digest, &sig)
+            .send_transaction_to_ckb(&payload.digest, &signature_bytes)
             .await
             .map_err(|err| Error::Custom(err.to_string()))?
             .ok_or_else(|| Error::Custom(RpcServerError::SendSignature.to_string()))
