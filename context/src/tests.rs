@@ -15,7 +15,7 @@ async fn drive_one() {
     // prepare to make instance of context
     let project_dep = ctx
         .assembler
-        .prepare_ko_transaction_project_celldep()
+        .prepare_transaction_project_celldep()
         .await
         .expect("project dep");
     let mut transaction_deps = PROJECT_VARS.project_cell_deps.clone();

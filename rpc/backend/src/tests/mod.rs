@@ -17,7 +17,7 @@ fn sign(ctx: &ContextImpl<impl CkbClient>, tx: TransactionView) -> [u8; 65] {
     // sign transaction
     let signature = {
         let mut bytes = [0u8; 65];
-        let signature = ctx.driver.sign_ko_transaction(&tx);
+        let signature = ctx.driver.sign_transaction(&tx);
         bytes.copy_from_slice(&signature);
         bytes
     };
@@ -128,7 +128,15 @@ async fn request_project_request_cell() {
         .await
         .expect("send")
         .unwrap();
-    println!("send success, hash = {}", hash);
+    println!("send request success, hash = {}", hash);
+
+    // check request committed
+    let committed_hash = backend
+        .check_project_request_committed(&hash, &PROJECT_VARS)
+        .await
+        .expect("check")
+        .unwrap();
+    println!("reqeust committed, hash = {}", committed_hash);
 }
 
 #[tokio::test]

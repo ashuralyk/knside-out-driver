@@ -39,7 +39,7 @@ async fn send_make_request_digest() {
     };
     let response: KoMakeRequestDigestResponse = create_server_and_client(false)
         .await
-        .request("make_request_digest", rpc_params!(params))
+        .request("ko_makeRequestDigest", rpc_params!(params))
         .await
         .expect("server response");
     println!("response = {:?}", response);
@@ -58,12 +58,13 @@ async fn call_contract_method() {
     };
     let digest = {
         let response: KoMakeRequestDigestResponse = client
-            .request("make_request_digest", rpc_params!(params))
+            .request("ko_makeRequestDigest", rpc_params!(params))
             .await
             .expect("server response");
         println!("payment_ckb = {}", response.payment);
         H256::from_str(response.digest.as_str()).expect("digest")
     };
+
     // sign transaction
     let privkey = SecretKey::from_slice(OWNER_PRIVATE_KEY.as_bytes()).expect("privkey");
     let message = Message::from_slice(digest.as_bytes()).expect("digest");
@@ -77,13 +78,22 @@ async fn call_contract_method() {
         signature
     };
     let signature = hex::encode(&signature_bytes);
+
     // send transaction
     let params = KoSendRequestSignatureParams { digest, signature };
     let hash: String = client
-        .request("send_digest_signature", rpc_params!(params))
+        .request("ko_sendRequestSignature", rpc_params!(params))
         .await
         .expect("server response");
-    println!("response = {:?}", hash);
+    println!("response = {}", hash);
+
+    // wait committed
+    let hash = H256::from_str(&hash).unwrap();
+    let committed_hash: Option<H256> = client
+        .request("ko_waitRequestCommitted", rpc_params!(hash))
+        .await
+        .expect("server commit");
+    println!("committed = {:?}", committed_hash);
 }
 
 #[tokio::test]
@@ -91,7 +101,7 @@ async fn send_fetch_global_data() {
     // send client request
     let response: String = create_server_and_client(false)
         .await
-        .request("fetch_global_data", None)
+        .request("ko_fetchGlobalData", None)
         .await
         .expect("server response");
     println!("response = {:?}", response);
@@ -102,7 +112,7 @@ async fn send_fetch_personal_data() {
     // send client request
     let response: KoFetchPersonalDataResponse = create_server_and_client(false)
         .await
-        .request("fetch_personal_data", rpc_params!(OWNER_ADDRESS))
+        .request("ko_fetchPersonalData", rpc_params!(OWNER_ADDRESS))
         .await
         .expect("server response");
     println!("response = {:?}", response);

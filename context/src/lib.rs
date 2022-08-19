@@ -1,3 +1,4 @@
+use std::collections::HashMap;
 use std::time::Duration;
 
 use ko_context_assembler::AssemblerImpl;
@@ -35,6 +36,7 @@ pub struct ContextImpl<C: CkbClient> {
     invalid_outpoints: Vec<OutPoint>,
     project_context: ProjectContext,
     rpc_receiver: UnboundedReceiver<KoContextRpcEcho>,
+    listening_requests: HashMap<H256, UnboundedSender<H256>>,
 }
 
 impl<C: CkbClient> ContextImpl<C> {
@@ -54,6 +56,7 @@ impl<C: CkbClient> ContextImpl<C> {
             invalid_outpoints: Vec::new(),
             project_context: ProjectContext::default(),
             rpc_receiver: receiver,
+            listening_requests: HashMap::new(),
         };
         (context, sender)
     }
@@ -71,10 +74,7 @@ impl<C: CkbClient> ContextImpl<C> {
     }
 
     pub async fn start_drive_loop(&mut self, project_cell_deps: &[CellDep]) -> KoResult<()> {
-        let project_dep = self
-            .assembler
-            .prepare_ko_transaction_project_celldep()
-            .await?;
+        let project_dep = self.assembler.prepare_transaction_project_celldep().await?;
         let mut transaction_deps = project_cell_deps.to_vec();
         transaction_deps.insert(0, project_dep.cell_dep);
 
@@ -90,17 +90,7 @@ impl<C: CkbClient> ContextImpl<C> {
             tokio::select! {
                 _ = tokio::time::sleep(self.drive_interval) => {
                     if let Some(hash) = self.drive(&project_dep.lua_code, &transaction_deps).await? {
-                        println!(
-                            "[INFO] send knside-out tansaction({}), wait `COMMITTED` status...",
-                            hash
-                        );
-                        self.driver
-                            .wait_ko_transaction_committed(
-                                &hash,
-                                &self.drive_interval,
-                                self.block_confirms_count,
-                            )
-                            .await?;
+                        println!("[INFO] transaction #{} confirmed", hash);
                         self.drive_interval = Duration::ZERO;
                     } else {
                         self.drive_interval = startup_interval;
@@ -135,7 +125,7 @@ impl<C: CkbClient> ContextImpl<C> {
         // assemble knside-out transaction
         let (tx, receipt) = self
             .assembler
-            .generate_ko_transaction_with_inputs_and_celldeps(
+            .generate_transaction_with_inputs_and_celldeps(
                 self.max_reqeusts_count,
                 project_cell_deps,
                 &self.invalid_outpoints,
@@ -157,6 +147,12 @@ impl<C: CkbClient> ContextImpl<C> {
         )];
 
         // trim unworkable requests from transaction inputs
+        let mut request_hashes = tx
+            .inputs()
+            .into_iter()
+            .skip(1)
+            .map(|input| (input.previous_output().tx_hash().unpack(), true))
+            .collect::<Vec<(H256, bool)>>();
         let mut inputs = tx.inputs().into_iter().map(Some).collect::<Vec<_>>();
         let mut total_inputs_capacity = receipt.global_ckb;
         result
@@ -174,6 +170,7 @@ impl<C: CkbClient> ContextImpl<C> {
                     self.invalid_outpoints.push(outpoint);
                     inputs[i + 1] = None;
                     println!("[ERROR] {} [SKIP]", err);
+                    request_hashes[i].1 = false;
                 }
             });
 
@@ -185,17 +182,35 @@ impl<C: CkbClient> ContextImpl<C> {
         let tx = tx.as_advanced_builder().set_inputs(inputs).build();
         let tx = self
             .assembler
-            .fill_ko_transaction_with_outputs(tx, &cell_outputs, total_inputs_capacity)
+            .fill_transaction_with_outputs(tx, &cell_outputs, total_inputs_capacity)
             .await?;
-        let signature = self.driver.sign_ko_transaction(&tx);
+        let signature = self.driver.sign_transaction(&tx);
         let tx = self
             .assembler
-            .complete_ko_transaction_with_signature(tx, signature);
-        let hash = self.driver.send_ko_transaction(tx).await?;
+            .complete_transaction_with_signature(tx, signature);
+        let hash = self.driver.send_transaction(tx).await?;
 
         // record last running context
         self.project_context.global_json_data = receipt.global_json_data.clone();
         self.project_context.owner_lockhash = project_owner;
+
+        // wait transaction has been confirmed for enough confirmations
+        self.driver
+            .wait_transaction_committed(&hash, &self.drive_interval, self.block_confirms_count)
+            .await?;
+
+        // clear request listening callbacks
+        request_hashes
+            .into_iter()
+            .for_each(|(request_hash, success)| {
+                if let Some(callback) = self.listening_requests.remove(&request_hash) {
+                    if success {
+                        callback.send(hash.clone()).expect("clear callback");
+                    } else {
+                        callback.send(H256::default()).expect("clear callback");
+                    }
+                }
+            });
 
         Ok(Some(hash))
     }
@@ -231,7 +246,7 @@ impl<C: CkbClient> Context for ContextImpl<C> {
     }
 
     fn listen_request_committed(&mut self, request_hash: &H256, sender: UnboundedSender<H256>) {
-        self.driver.add_callback_request_hash(request_hash, sender);
+        self.listening_requests.insert(request_hash.clone(), sender);
     }
 
     async fn run(mut self, project_cell_deps: &[CellDep]) {

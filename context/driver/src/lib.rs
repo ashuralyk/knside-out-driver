@@ -1,15 +1,13 @@
-use std::collections::HashMap;
 use std::time::Duration;
 
 use ckb_hash::new_blake2b;
 use ko_protocol::ckb_jsonrpc_types::{OutputsValidator, Status, TransactionView as JsonTxView};
 use ko_protocol::ckb_sdk::SECP256K1;
-use ko_protocol::ckb_types::packed::{Transaction, WitnessArgs};
-use ko_protocol::ckb_types::prelude::{Builder, Entity, Pack, Unpack};
+use ko_protocol::ckb_types::packed::WitnessArgs;
+use ko_protocol::ckb_types::prelude::{Builder, Entity, Pack};
 use ko_protocol::ckb_types::{bytes::Bytes, core::TransactionView, H256};
 use ko_protocol::secp256k1::{Message, SecretKey};
 use ko_protocol::serde_json::to_string;
-use ko_protocol::tokio::sync::mpsc::UnboundedSender;
 use ko_protocol::traits::{CkbClient, Driver};
 use ko_protocol::{async_trait, tokio, KoResult};
 
@@ -19,7 +17,6 @@ use error::DriverError;
 pub struct DriverImpl<C: CkbClient> {
     rpc_client: C,
     privkey: SecretKey,
-    listening_requests: HashMap<H256, UnboundedSender<H256>>,
 }
 
 impl<C: CkbClient> DriverImpl<C> {
@@ -27,22 +24,13 @@ impl<C: CkbClient> DriverImpl<C> {
         DriverImpl {
             rpc_client: rpc_client.clone(),
             privkey: *privkey,
-            listening_requests: HashMap::new(),
         }
-    }
-
-    pub fn add_callback_request_hash(
-        &mut self,
-        request_hash: &H256,
-        sender: UnboundedSender<H256>,
-    ) {
-        self.listening_requests.insert(request_hash.clone(), sender);
     }
 }
 
 #[async_trait]
 impl<C: CkbClient> Driver for DriverImpl<C> {
-    fn sign_ko_transaction(&self, tx: &TransactionView) -> Bytes {
+    fn sign_transaction(&self, tx: &TransactionView) -> Bytes {
         let mut blake2b = new_blake2b();
         blake2b.update(&tx.hash().raw_data());
         // prepare empty witness for digest
@@ -67,7 +55,7 @@ impl<C: CkbClient> Driver for DriverImpl<C> {
         Bytes::from(signature_bytes)
     }
 
-    async fn send_ko_transaction(&self, tx: TransactionView) -> KoResult<H256> {
+    async fn send_transaction(&self, tx: TransactionView) -> KoResult<H256> {
         let hash = self
             .rpc_client
             .send_transaction(&tx.data().into(), Some(OutputsValidator::Passthrough))
@@ -81,7 +69,7 @@ impl<C: CkbClient> Driver for DriverImpl<C> {
         Ok(hash)
     }
 
-    async fn wait_ko_transaction_committed(
+    async fn wait_transaction_committed(
         &mut self,
         hash: &H256,
         interval: &Duration,
@@ -111,30 +99,14 @@ impl<C: CkbClient> Driver for DriverImpl<C> {
                     let block = self.rpc_client.get_block(&block_hash).await.unwrap();
                     block_number = block.header.inner.number.into();
                     println!(
-                        "[INFO] transaction commited in block #{}, wait confirm...",
-                        block_number
+                        "[INFO] transaction #{} commited in block #{}, wait confirm...",
+                        hash, block_number
                     );
                 }
             } else {
                 let tip = self.rpc_client.get_tip_header().await.unwrap();
                 let tip_number: u64 = tip.inner.number.into();
                 if tip_number > block_number + confirms as u64 {
-                    println!("[INFO] transaction confirmed");
-                    // clear request listening callbacks
-                    let out_points = Transaction::from(tx.transaction.unwrap().inner)
-                        .into_view()
-                        .inputs();
-                    for i in 0..out_points.len() {
-                        let request_hash = out_points
-                            .get(i)
-                            .unwrap()
-                            .previous_output()
-                            .tx_hash()
-                            .unpack();
-                        if let Some(callback) = self.listening_requests.remove(&request_hash) {
-                            callback.send(hash.clone()).expect("clear callback");
-                        }
-                    }
                     break;
                 }
             }

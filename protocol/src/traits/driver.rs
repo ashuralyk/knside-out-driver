@@ -7,11 +7,11 @@ use ckb_types::H256;
 
 #[async_trait]
 pub trait Driver {
-    fn sign_ko_transaction(&self, tx: &TransactionView) -> Bytes;
+    fn sign_transaction(&self, tx: &TransactionView) -> Bytes;
 
-    async fn send_ko_transaction(&self, tx: TransactionView) -> KoResult<H256>;
+    async fn send_transaction(&self, tx: TransactionView) -> KoResult<H256>;
 
-    async fn wait_ko_transaction_committed(
+    async fn wait_transaction_committed(
         &mut self,
         hash: &H256,
         interval: &Duration,
