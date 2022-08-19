@@ -1046,6 +1046,7 @@ dependencies = [
 name = "ko-context-assembler"
 version = "0.1.0"
 dependencies = [
+ "ckb-hash 0.104.0",
  "ko-protocol",
  "ko-rpc-client",
 ]

@@ -11,6 +11,7 @@ pub trait Executor {
         project_owner: &H256,
         user_requests: &[KoRequest],
         project_lua_code: &Bytes,
+        random_seeds: &[u64; 2],
     ) -> KoResult<KoExecuteReceipt>;
 
     fn estimate_payment_ckb(

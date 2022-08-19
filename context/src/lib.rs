@@ -4,7 +4,7 @@ use std::time::Duration;
 use ko_context_assembler::AssemblerImpl;
 use ko_context_driver::DriverImpl;
 use ko_context_executor::ExecutorImpl;
-use ko_protocol::ckb_types::packed::{CellDep, OutPoint, Script};
+use ko_protocol::ckb_types::packed::{CellDep, Script};
 use ko_protocol::ckb_types::prelude::Unpack;
 use ko_protocol::ckb_types::{bytes::Bytes, H256};
 use ko_protocol::secp256k1::SecretKey;
@@ -33,10 +33,9 @@ pub struct ContextImpl<C: CkbClient> {
     max_reqeusts_count: u8,
     block_confirms_count: u8,
 
-    invalid_outpoints: Vec<OutPoint>,
     project_context: ProjectContext,
     rpc_receiver: UnboundedReceiver<KoContextRpcEcho>,
-    listening_requests: HashMap<H256, UnboundedSender<H256>>,
+    listening_requests: HashMap<H256, UnboundedSender<KoResult<H256>>>,
 }
 
 impl<C: CkbClient> ContextImpl<C> {
@@ -53,7 +52,6 @@ impl<C: CkbClient> ContextImpl<C> {
             drive_interval: Duration::from_secs(3),
             max_reqeusts_count: 20,
             block_confirms_count: 3,
-            invalid_outpoints: Vec::new(),
             project_context: ProjectContext::default(),
             rpc_receiver: receiver,
             listening_requests: HashMap::new(),
@@ -128,7 +126,6 @@ impl<C: CkbClient> ContextImpl<C> {
             .generate_transaction_with_inputs_and_celldeps(
                 self.max_reqeusts_count,
                 project_cell_deps,
-                &self.invalid_outpoints,
             )
             .await?;
         if receipt.requests.is_empty() {
@@ -140,6 +137,7 @@ impl<C: CkbClient> ContextImpl<C> {
             &project_owner,
             &receipt.requests,
             project_lua_code,
+            &receipt.random_seeds,
         )?;
         let mut cell_outputs = vec![KoCellOutput::new(
             Some(result.global_json_data),
@@ -151,9 +149,8 @@ impl<C: CkbClient> ContextImpl<C> {
             .inputs()
             .into_iter()
             .skip(1)
-            .map(|input| (input.previous_output().tx_hash().unpack(), true))
-            .collect::<Vec<(H256, bool)>>();
-        let mut inputs = tx.inputs().into_iter().map(Some).collect::<Vec<_>>();
+            .map(|input| (input.previous_output().tx_hash().unpack(), None))
+            .collect::<Vec<(H256, _)>>();
         let mut total_inputs_capacity = receipt.global_ckb;
         result
             .personal_outputs
@@ -165,21 +162,22 @@ impl<C: CkbClient> ContextImpl<C> {
                     total_inputs_capacity += receipt.requests[i].ckb;
                 }
                 Err(err) => {
-                    // because the frist input is global_cell, so the offset is 1
-                    let outpoint = inputs[i + 1].as_ref().unwrap().previous_output();
-                    self.invalid_outpoints.push(outpoint);
-                    inputs[i + 1] = None;
-                    println!("[ERROR] {} [SKIP]", err);
-                    request_hashes[i].1 = false;
+                    // recover the previous cell before its request operation
+                    let request = &receipt.requests[i];
+                    let data = {
+                        if request.json_data.is_empty() {
+                            None
+                        } else {
+                            Some(request.json_data.clone())
+                        }
+                    };
+                    cell_outputs.push(KoCellOutput::new(data, request.lock_script.clone()));
+                    total_inputs_capacity += receipt.requests[i].ckb;
+                    request_hashes[i].1 = Some(err);
                 }
             });
 
-        // if only have global_cell exist, skip this try
-        let inputs = inputs.into_iter().flatten().collect::<Vec<_>>();
-        if inputs.len() == 1 {
-            return Ok(None);
-        }
-        let tx = tx.as_advanced_builder().set_inputs(inputs).build();
+        // complete transaction
         let tx = self
             .assembler
             .fill_transaction_with_outputs(tx, &cell_outputs, total_inputs_capacity)
@@ -202,12 +200,12 @@ impl<C: CkbClient> ContextImpl<C> {
         // clear request listening callbacks
         request_hashes
             .into_iter()
-            .for_each(|(request_hash, success)| {
+            .for_each(|(request_hash, error)| {
                 if let Some(callback) = self.listening_requests.remove(&request_hash) {
-                    if success {
-                        callback.send(hash.clone()).expect("clear callback");
+                    if let Some(err) = error {
+                        callback.send(Err(err)).expect("clear callback");
                     } else {
-                        callback.send(H256::default()).expect("clear callback");
+                        callback.send(Ok(request_hash)).expect("clear callback");
                     }
                 }
             });
@@ -245,7 +243,11 @@ impl<C: CkbClient> Context for ContextImpl<C> {
         )
     }
 
-    fn listen_request_committed(&mut self, request_hash: &H256, sender: UnboundedSender<H256>) {
+    fn listen_request_committed(
+        &mut self,
+        request_hash: &H256,
+        sender: UnboundedSender<KoResult<H256>>,
+    ) {
         self.listening_requests.insert(request_hash.clone(), sender);
     }
 

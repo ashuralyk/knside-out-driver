@@ -1,9 +1,9 @@
+use ckb_hash::{Blake2bBuilder, CKB_HASH_PERSONALIZATION};
+
 use ko_protocol::ckb_sdk::constants::TYPE_ID_CODE_HASH;
 use ko_protocol::ckb_sdk::rpc::ckb_indexer::{ScriptType, SearchKey};
 use ko_protocol::ckb_types::core::{Capacity, DepType, ScriptHashType, TransactionView};
-use ko_protocol::ckb_types::packed::{
-    CellDep, CellInput, CellOutput, OutPoint, Script, WitnessArgs,
-};
+use ko_protocol::ckb_types::packed::{CellDep, CellInput, CellOutput, Script, WitnessArgs};
 use ko_protocol::ckb_types::prelude::{Builder, Entity, Pack, Unpack};
 use ko_protocol::ckb_types::{bytes::Bytes, H256};
 use ko_protocol::traits::{Assembler, CkbClient};
@@ -70,13 +70,12 @@ impl<C: CkbClient> Assembler for AssemblerImpl<C> {
         &self,
         cell_number: u8,
         cell_deps: &[CellDep],
-        skipped_outpoints: &[OutPoint],
     ) -> KoResult<(TransactionView, KoAssembleReceipt)> {
         // find project global cell
         let global_cell =
             helper::search_global_cell(&self.rpc_client, &self.project_code_hash, &self.project_id)
                 .await?;
-        let mut ko_tx = TransactionView::new_advanced_builder()
+        let mut tx = TransactionView::new_advanced_builder()
             .input(
                 CellInput::new_builder()
                     .previous_output(global_cell.out_point)
@@ -92,6 +91,9 @@ impl<C: CkbClient> Assembler for AssemblerImpl<C> {
             filter: None,
         };
         let mut after = None;
+        let mut blake2b = Blake2bBuilder::new(16)
+            .personal(CKB_HASH_PERSONALIZATION)
+            .build();
         while requests.len() < cell_number as usize {
             let result = self
                 .rpc_client
@@ -102,9 +104,6 @@ impl<C: CkbClient> Assembler for AssemblerImpl<C> {
                 .objects
                 .into_iter()
                 .try_for_each::<_, KoResult<_>>(|cell| {
-                    if skipped_outpoints.contains(&cell.out_point.clone().into()) {
-                        return Ok(());
-                    }
                     let output = cell.output.into();
                     if !helper::check_valid_request(&output, &self.project_code_hash) {
                         // println!("[WARN] find invalid reqeust format");
@@ -141,14 +140,11 @@ impl<C: CkbClient> Assembler for AssemblerImpl<C> {
                         payment,
                         output.capacity().unpack(),
                     ));
-                    ko_tx = ko_tx
-                        .as_advanced_builder()
-                        .input(
-                            CellInput::new_builder()
-                                .previous_output(cell.out_point.into())
-                                .build(),
-                        )
+                    let input = CellInput::new_builder()
+                        .previous_output(cell.out_point.into())
                         .build();
+                    blake2b.update(input.as_slice());
+                    tx = tx.as_advanced_builder().input(input).build();
                     Ok(())
                 })?;
             if result.last_cursor.is_empty() {
@@ -156,13 +152,16 @@ impl<C: CkbClient> Assembler for AssemblerImpl<C> {
             }
             after = Some(result.last_cursor);
         }
+        let mut random_bytes = [0u8; 16];
+        blake2b.finalize(&mut random_bytes);
         let receipt = KoAssembleReceipt::new(
             requests,
             global_cell.output_data,
             global_cell.output.lock(),
             global_cell.output.capacity().unpack(),
+            random_bytes,
         );
-        Ok((ko_tx, receipt))
+        Ok((tx, receipt))
     }
 
     async fn fill_transaction_with_outputs(

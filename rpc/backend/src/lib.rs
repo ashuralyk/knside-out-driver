@@ -420,7 +420,7 @@ impl<C: CkbClient> Backend for BackendImpl<C> {
                         sender,
                     )))
                     .expect("ListenRequestCommitted channel request");
-                    let committed_hash = receiver.recv().await.unwrap();
+                    let committed_hash = receiver.recv().await.unwrap()?;
                     return Ok(Some(committed_hash));
                 } else {
                     return Ok(None);

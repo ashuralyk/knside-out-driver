@@ -7,7 +7,7 @@ use ko_protocol::derive_more::Constructor;
 use ko_protocol::traits::Executor;
 use ko_protocol::types::{assembler::KoRequest, executor::KoExecuteReceipt};
 use ko_protocol::{hex, serde_json, KoResult};
-use mlua::{Lua, LuaSerdeExt, Table};
+use mlua::{Function, Lua, LuaSerdeExt, Table};
 
 mod error;
 mod helper;
@@ -60,8 +60,12 @@ impl Executor for ExecutorImpl {
         project_owner: &H256,
         user_requests: &[KoRequest],
         project_lua_code: &Bytes,
+        random_seeds: &[u64; 2],
     ) -> KoResult<KoExecuteReceipt> {
         let lua = self.prepare_lua_context(global_json_data, project_owner, project_lua_code)?;
+        let math: Table = luac!(lua.globals().get("math"));
+        let randomseed: Function = luac!(math.get("randomseed"));
+        luac!(randomseed.call((random_seeds[0], random_seeds[1])));
 
         // running each user function_call requests
         let personal_outputs = helper::parse_requests_to_outputs(&lua, user_requests)?;

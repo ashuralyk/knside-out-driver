@@ -1,6 +1,8 @@
 use ckb_types::{packed::Script, H256};
 use tokio::sync::mpsc::UnboundedSender;
 
+use crate::KoResult;
+
 #[derive(Debug)]
 pub enum KoContextRpcEcho {
     EstimatePaymentCkb(
@@ -9,5 +11,5 @@ pub enum KoContextRpcEcho {
             UnboundedSender<u64>,
         ),
     ),
-    ListenRequestCommitted((H256, UnboundedSender<H256>)),
+    ListenRequestCommitted((H256, UnboundedSender<KoResult<H256>>)),
 }

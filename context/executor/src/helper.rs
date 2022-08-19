@@ -18,6 +18,7 @@ pub fn run_request(
     request: &KoRequest,
     offset: usize,
 ) -> KoResult<(Option<Bytes>, Script)> {
+    // prepare personal msg injections
     let msg: Table = luac!(lua.globals().get("msg"));
     let request_owner = request.lock_script.calc_script_hash();
     let recipient_owner = {
@@ -42,12 +43,15 @@ pub fn run_request(
         call.append(&mut request.function_call.to_vec());
         call
     };
+
+    // run user request call
     let return_table: Table = lua.load(&function_call).call(()).map_err(|err| {
         ExecutorError::ErrorLoadRequestLuaCode(
             String::from_utf8(request.function_call.to_vec()).unwrap(),
             err.to_string(),
         )
     })?;
+
     // check specified owner lock_hash
     let owner_lockhash: mlua::String = luac!(return_table.get("owner"));
     let owner_lockscript = {
@@ -62,6 +66,7 @@ pub fn run_request(
     if lua_owner != rust_owner {
         return Err(ExecutorError::OwnerLockhashMismatch(lua_owner, rust_owner).into());
     }
+
     // generate cell_output data
     let output_data: Value = luac!(return_table.get("data"));
     let json_data = match output_data {
@@ -79,6 +84,7 @@ pub fn run_request(
 }
 
 pub fn parse_requests_to_outputs(lua: &Lua, requests: &[KoRequest]) -> KoResult<ExecuteResult> {
+    // complete msg injections
     let msg: Table = luac!(lua.globals().get("msg"));
     let cost_ckbs = Rc::new(RefCell::new(HashMap::new()));
     let ckbs = cost_ckbs.clone();
@@ -93,15 +99,34 @@ pub fn parse_requests_to_outputs(lua: &Lua, requests: &[KoRequest]) -> KoResult<
         .iter()
         .enumerate()
         .map(|(i, request)| {
-            let output = run_request(lua, request, i)?;
-            // check cell_capacity
-            if let Some(require) = cost_ckbs.borrow().get(&i) {
-                let offer = &request.payment;
-                if offer < require {
-                    return Err(ExecutorError::InsufficientRequiredCkb(*offer, *require, i).into());
+            let previous_global: Table = {
+                let msg: Table = luac!(lua.globals().get("msg"));
+                luac!(msg.get("global"))
+            };
+            match run_request(lua, request, i) {
+                Ok(output) => {
+                    // check cell_capacity
+                    if let Some(require) = cost_ckbs.borrow().get(&i) {
+                        let offer = &request.payment;
+                        if offer < require {
+                            // recover previous global data
+                            let msg: Table = luac!(lua.globals().get("msg"));
+                            luac!(msg.set("global", previous_global));
+                            return Err(ExecutorError::InsufficientRequiredCkb(
+                                *offer, *require, i,
+                            )
+                            .into());
+                        }
+                    }
+                    Ok(output)
+                }
+                Err(err) => {
+                    // recover previous global data
+                    let msg: Table = luac!(lua.globals().get("msg"));
+                    luac!(msg.set("global", previous_global));
+                    Err(err)
                 }
             }
-            Ok(output)
         })
         .collect::<Vec<_>>();
     Ok(user_outputs)

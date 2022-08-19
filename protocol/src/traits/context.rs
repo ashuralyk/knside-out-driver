@@ -15,7 +15,11 @@ pub trait Context: Send + Sync {
         recipient: &Option<Script>,
     ) -> KoResult<u64>;
 
-    fn listen_request_committed(&mut self, request_hash: &H256, sender: UnboundedSender<H256>);
+    fn listen_request_committed(
+        &mut self,
+        request_hash: &H256,
+        sender: UnboundedSender<KoResult<H256>>,
+    );
 
     async fn run(mut self, project_cell_deps: &[CellDep]);
 }

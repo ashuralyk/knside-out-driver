@@ -6,5 +6,7 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
+ckb-hash = "0.104"
+
 ko-rpc-client = { path = "../../rpc/client" }
 ko-protocol = { path = "../../protocol" }
