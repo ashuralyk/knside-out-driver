@@ -118,6 +118,9 @@ impl<C: CkbClient> ContextImpl<C> {
                             &recipient
                         )?;
                         response.send(payment_ckb).expect("EstimatePaymentCkb channel");
+                    },
+                    KoContextRpcEcho::ListenRequestCommitted((hash, response))=> {
+                        self.listen_request_committed(&hash, response);
                     }
                 }
             }
@@ -225,6 +228,10 @@ impl<C: CkbClient> Context for ContextImpl<C> {
             request,
             &self.project_context.contract_code,
         )
+    }
+
+    fn listen_request_committed(&mut self, request_hash: &H256, sender: UnboundedSender<H256>) {
+        self.driver.add_callback_request_hash(request_hash, sender);
     }
 
     async fn run(mut self, project_cell_deps: &[CellDep]) {

@@ -78,7 +78,7 @@ async fn call_contract_method() {
     };
     let signature = hex::encode(&signature_bytes);
     // send transaction
-    let params = KoSendDigestSignatureParams { digest, signature };
+    let params = KoSendRequestSignatureParams { digest, signature };
     let hash: String = client
         .request("send_digest_signature", rpc_params!(params))
         .await

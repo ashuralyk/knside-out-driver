@@ -45,6 +45,9 @@ pub enum BackendError {
 
     #[display(fmt = "Lack of capacity: {} < {}", _0, _1)]
     InsufficientCapacity(u64, u64),
+
+    #[display(fmt = "Request hash not found: {}", _0)]
+    InvalidRequestHash(H256),
 }
 
 impl std::error::Error for BackendError {}

@@ -21,7 +21,7 @@ pub struct KoMakeRequestDigestResponse {
 }
 
 #[derive(Deserialize, Serialize)]
-pub struct KoSendDigestSignatureParams {
+pub struct KoSendRequestSignatureParams {
     pub digest: H256,
     pub signature: String,
 }

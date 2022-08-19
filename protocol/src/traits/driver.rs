@@ -12,7 +12,7 @@ pub trait Driver {
     async fn send_ko_transaction(&self, tx: TransactionView) -> KoResult<H256>;
 
     async fn wait_ko_transaction_committed(
-        &self,
+        &mut self,
         hash: &H256,
         interval: &Duration,
         confirms: u8,

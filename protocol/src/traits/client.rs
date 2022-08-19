@@ -1,8 +1,8 @@
 use std::{future::Future, pin::Pin};
 
 use ckb_jsonrpc_types::{
-    BlockNumber, BlockView, HeaderView, JsonBytes, OutputsValidator, Transaction,
-    TransactionWithStatus,
+    BlockNumber, BlockView, CellWithStatus, HeaderView, JsonBytes, OutPoint, OutputsValidator,
+    Transaction, TransactionWithStatus,
 };
 use ckb_sdk::rpc::ckb_indexer::{Cell, Pagination, SearchKey};
 use ckb_types::H256;
@@ -19,6 +19,8 @@ pub trait CkbClient: Send + Sync + Clone {
     fn get_tip_header(&self) -> RPC<HeaderView>;
 
     fn get_transaction(&self, hash: &H256) -> RPC<Option<TransactionWithStatus>>;
+
+    fn get_live_cell(&self, out_point: &OutPoint, with_data: bool) -> RPC<CellWithStatus>;
 
     fn send_transaction(
         &self,

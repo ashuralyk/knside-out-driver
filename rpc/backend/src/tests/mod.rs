@@ -1,7 +1,7 @@
 use ko_context::ContextImpl;
 use ko_protocol::ckb_jsonrpc_types::TransactionView as JsonTxView;
 use ko_protocol::ckb_types::bytes::Bytes;
-use ko_protocol::ckb_types::core::{TransactionView};
+use ko_protocol::ckb_types::core::TransactionView;
 use ko_protocol::secp256k1::SecretKey;
 use ko_protocol::traits::{Backend, CkbClient, Driver};
 use ko_protocol::{serde_json, tokio, TestVars::*};

@@ -10,8 +10,8 @@ use std::{
 };
 
 use ko_protocol::ckb_jsonrpc_types::{
-    BlockNumber, BlockView, HeaderView, JsonBytes, OutputsValidator, Transaction,
-    TransactionWithStatus, Uint32,
+    BlockNumber, BlockView, CellWithStatus, HeaderView, JsonBytes, OutPoint, OutputsValidator,
+    Transaction, TransactionWithStatus, Uint32,
 };
 use ko_protocol::ckb_sdk::rpc::ckb_indexer::{Cell, Order, Pagination, SearchKey};
 use ko_protocol::ckb_types::H256;
@@ -115,6 +115,18 @@ impl CkbClient for RpcClient {
 
     fn get_transaction(&self, hash: &H256) -> RPC<Option<TransactionWithStatus>> {
         self.get_transaction(hash).boxed()
+    }
+
+    fn get_live_cell(&self, out_point: &OutPoint, with_data: bool) -> RPC<CellWithStatus> {
+        jsonrpc!(
+            "get_live_cell",
+            Target::CKB,
+            self,
+            CellWithStatus,
+            out_point,
+            with_data
+        )
+        .boxed()
     }
 
     fn send_transaction(

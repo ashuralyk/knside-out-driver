@@ -17,19 +17,28 @@ type RpcResult<T> = Result<T, Error>;
 
 #[rpc(server)]
 trait KnsideRpc {
-    #[method(name = "make_request_digest")]
+    #[method(name = "ko_version")]
+    async fn version(&self) -> RpcResult<String>;
+
+    #[method(name = "ko_makeRequestDigest")]
     async fn make_request_digest(
         &self,
         payload: KoMakeRequestDigestParams,
     ) -> RpcResult<KoMakeRequestDigestResponse>;
 
-    #[method(name = "send_digest_signature")]
-    async fn send_digest_signature(&self, payload: KoSendDigestSignatureParams) -> RpcResult<H256>;
+    #[method(name = "ko_sendRequestSignature")]
+    async fn send_request_signature(
+        &self,
+        payload: KoSendRequestSignatureParams,
+    ) -> RpcResult<H256>;
 
-    #[method(name = "fetch_global_data")]
+    #[method(name = "ko_waitRequestCommitted")]
+    async fn wait_request_committed(&self, request_hash: H256) -> RpcResult<Option<H256>>;
+
+    #[method(name = "ko_fetchGlobalData")]
     async fn fetch_global_data(&self) -> RpcResult<String>;
 
-    #[method(name = "fetch_personal_data")]
+    #[method(name = "ko_fetchPersonalData")]
     async fn fetch_personal_data(&self, address: String) -> RpcResult<KoFetchPersonalDataResponse>;
 }
 
@@ -40,6 +49,11 @@ pub struct RpcServer<B: Backend + 'static> {
 // define all of rpc methods here
 #[async_trait]
 impl<B: Backend + 'static> KnsideRpcServer for RpcServer<B> {
+    async fn version(&self) -> RpcResult<String> {
+        println!(" [RPC] receive `version` rpc call");
+        Ok("1.0.0".into())
+    }
+
     async fn make_request_digest(
         &self,
         payload: KoMakeRequestDigestParams,
@@ -66,13 +80,18 @@ impl<B: Backend + 'static> KnsideRpcServer for RpcServer<B> {
         Ok(result)
     }
 
-    async fn send_digest_signature(&self, payload: KoSendDigestSignatureParams) -> RpcResult<H256> {
+    async fn send_request_signature(
+        &self,
+        payload: KoSendRequestSignatureParams,
+    ) -> RpcResult<H256> {
         println!(
-            " [RPC] receive `send_digest_signature` rpc call <= digest({})", payload.digest
+            " [RPC] receive `send_request_signature` rpc call <= digest({})",
+            payload.digest
         );
-
         let signature = hex::decode(payload.signature).map_err(|_| {
-            Error::Call(CallError::InvalidParams(RpcServerError::InvalidSignatureHexBytes.into()))
+            Error::Call(CallError::InvalidParams(
+                RpcServerError::InvalidSignatureHexBytes.into(),
+            ))
         })?;
         if signature.len() != 65 {
             return Err(Error::Call(CallError::InvalidParams(
@@ -92,6 +111,20 @@ impl<B: Backend + 'static> KnsideRpcServer for RpcServer<B> {
             .ok_or_else(|| Error::Custom(RpcServerError::SendSignature.to_string()))
     }
 
+    async fn wait_request_committed(&self, request_hash: H256) -> RpcResult<Option<H256>> {
+        println!(
+            " [RPC] receive `wait_request_committed` rpc call <= hash({})",
+            hex::encode(&request_hash)
+        );
+        self.ctx
+            .backend
+            .lock()
+            .await
+            .check_project_request_committed(&request_hash, &self.ctx.project_deps)
+            .await
+            .map_err(|err| Error::Custom(err.to_string()))
+    }
+
     async fn fetch_global_data(&self) -> RpcResult<String> {
         let global_data = self
             .ctx
@@ -102,7 +135,7 @@ impl<B: Backend + 'static> KnsideRpcServer for RpcServer<B> {
             .await
             .map_err(|err| Error::Custom(err.to_string()));
         println!(
-            " [RPC] receive `fetch_global_data` rpc call, result = {:?}",
+            " [RPC] receive `fetch_global_data` rpc call => {:?}",
             global_data
         );
         return global_data;

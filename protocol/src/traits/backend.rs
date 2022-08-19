@@ -17,7 +17,6 @@ pub trait Backend: Send + Sync {
         project_deps: &ProjectDeps,
     ) -> KoResult<H256>;
 
-    #[allow(clippy::too_many_arguments)]
     async fn create_project_request_digest(
         &mut self,
         address: String,
@@ -26,6 +25,12 @@ pub trait Backend: Send + Sync {
         function_call: String,
         project_deps: &ProjectDeps,
     ) -> KoResult<(H256, u64)>;
+
+    async fn check_project_request_committed(
+        &mut self,
+        transaction_hash: &H256,
+        project_deps: &ProjectDeps,
+    ) -> KoResult<Option<H256>>;
 
     async fn send_transaction_to_ckb(
         &mut self,

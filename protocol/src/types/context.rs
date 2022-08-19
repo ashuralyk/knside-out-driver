@@ -1,4 +1,4 @@
-use ckb_types::packed::Script;
+use ckb_types::{packed::Script, H256};
 use tokio::sync::mpsc::UnboundedSender;
 
 #[derive(Debug)]
@@ -9,4 +9,5 @@ pub enum KoContextRpcEcho {
             UnboundedSender<u64>,
         ),
     ),
+    ListenRequestCommitted((H256, UnboundedSender<H256>)),
 }

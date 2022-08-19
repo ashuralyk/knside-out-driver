@@ -9,7 +9,7 @@ use ko_protocol::ckb_types::packed::{CellInput, CellOutput, OutPoint, Script, Tr
 use ko_protocol::ckb_types::prelude::{Builder, Entity, Pack, Unpack};
 use ko_protocol::ckb_types::{bytes::Bytes, H256};
 use ko_protocol::serde_json::to_string;
-use ko_protocol::tokio::sync::mpsc::{unbounded_channel, UnboundedReceiver, UnboundedSender};
+use ko_protocol::tokio::sync::mpsc::{unbounded_channel, UnboundedSender};
 use ko_protocol::traits::{Backend, CkbClient};
 use ko_protocol::types::context::KoContextRpcEcho;
 use ko_protocol::types::generated::{mol_deployment, mol_flag_0};
@@ -26,20 +26,14 @@ pub struct BackendImpl<C: CkbClient> {
     rpc_client: C,
     cached_transactions: HashMap<H256, TransactionView>,
     context_rpc: Option<UnboundedSender<KoContextRpcEcho>>,
-
-    estimate_payment_ckb_sender: UnboundedSender<u64>,
-    estimate_payment_ckb_receiver: UnboundedReceiver<u64>,
 }
 
 impl<C: CkbClient> BackendImpl<C> {
     pub fn new(rpc_client: &C, context: Option<UnboundedSender<KoContextRpcEcho>>) -> Self {
-        let (sender, receiver) = unbounded_channel();
         BackendImpl {
             rpc_client: rpc_client.clone(),
             cached_transactions: HashMap::new(),
             context_rpc: context,
-            estimate_payment_ckb_sender: sender,
-            estimate_payment_ckb_receiver: receiver,
         }
     }
 
@@ -316,6 +310,7 @@ impl<C: CkbClient> Backend for BackendImpl<C> {
         // request payment ckb of this call
         let payment_ckb = {
             if let Some(rpc) = &self.context_rpc {
+                let (sender, mut receiver) = unbounded_channel();
                 rpc.send(KoContextRpcEcho::EstimatePaymentCkb((
                     (
                         secp256k1_script.clone(),
@@ -323,10 +318,10 @@ impl<C: CkbClient> Backend for BackendImpl<C> {
                         previous_json_data.clone(),
                         recipient_secp256k1_script.clone(),
                     ),
-                    self.estimate_payment_ckb_sender.clone(),
+                    sender,
                 )))
                 .expect("EstimatePaymentCkb channel request");
-                self.estimate_payment_ckb_receiver.recv().await.unwrap()
+                receiver.recv().await.unwrap()
             } else {
                 0u64
             }
@@ -398,6 +393,55 @@ impl<C: CkbClient> Backend for BackendImpl<C> {
         self.cached_transactions.insert(digest.clone(), tx);
 
         Ok((digest, payment_ckb))
+    }
+
+    async fn check_project_request_committed(
+        &mut self,
+        transaction_hash: &H256,
+        project_deps: &ProjectDeps,
+    ) -> KoResult<Option<H256>> {
+        let out_point = OutPoint::new_builder()
+            .tx_hash(transaction_hash.pack())
+            .index(0u32.pack())
+            .build();
+        let cell = self
+            .rpc_client
+            .get_live_cell(&out_point.into(), false)
+            .await?;
+        if let Some(cell) = cell.cell {
+            let lock = CellOutput::from(cell.output).lock();
+            if lock.code_hash() == project_deps.project_code_hash.pack()
+                && lock.args().get(0) == Some(2u8.into())
+            {
+                if let Some(rpc) = &self.context_rpc {
+                    let (sender, mut receiver) = unbounded_channel();
+                    rpc.send(KoContextRpcEcho::ListenRequestCommitted((
+                        transaction_hash.clone(),
+                        sender,
+                    )))
+                    .expect("ListenRequestCommitted channel request");
+                    let committed_hash = receiver.recv().await.unwrap();
+                    return Ok(Some(committed_hash));
+                } else {
+                    return Ok(None);
+                }
+            }
+        } else {
+            let tx = self.rpc_client.get_transaction(transaction_hash).await?;
+            if let Some(tx) = tx {
+                if let Some(tx) = tx.transaction {
+                    let tx = Transaction::from(tx.inner).into_view();
+                    if let Some(cell) = tx.output(0) {
+                        if cell.lock().code_hash() == project_deps.project_code_hash.pack()
+                            && cell.lock().args().get(0) == Some(2u8.into())
+                        {
+                            return Ok(None);
+                        }
+                    }
+                }
+            }
+        }
+        Err(BackendError::InvalidRequestHash(transaction_hash.clone()).into())
     }
 
     async fn send_transaction_to_ckb(
