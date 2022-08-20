@@ -142,6 +142,7 @@ impl<C: CkbClient> ContextImpl<C> {
         let mut cell_outputs = vec![KoCellOutput::new(
             Some(result.global_json_data),
             receipt.global_lockscript,
+            0,
         )];
 
         // trim unworkable requests from transaction inputs
@@ -158,7 +159,7 @@ impl<C: CkbClient> ContextImpl<C> {
             .enumerate()
             .for_each(|(i, output)| match output {
                 Ok((data, lock_script)) => {
-                    cell_outputs.push(KoCellOutput::new(data, lock_script));
+                    cell_outputs.push(KoCellOutput::new(data, lock_script, 0));
                     total_inputs_capacity += receipt.requests[i].ckb;
                 }
                 Err(err) => {
@@ -171,7 +172,11 @@ impl<C: CkbClient> ContextImpl<C> {
                             Some(request.json_data.clone())
                         }
                     };
-                    cell_outputs.push(KoCellOutput::new(data, request.lock_script.clone()));
+                    cell_outputs.push(KoCellOutput::new(
+                        data,
+                        request.lock_script.clone(),
+                        request.payment,
+                    ));
                     total_inputs_capacity += receipt.requests[i].ckb;
                     request_hashes[i].1 = Some(err);
                 }

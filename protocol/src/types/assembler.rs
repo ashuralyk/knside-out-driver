@@ -55,4 +55,5 @@ impl KoAssembleReceipt {
 pub struct KoCellOutput {
     pub data: Option<Bytes>,
     pub lock_script: Script,
+    pub extra_capacity: u64,
 }

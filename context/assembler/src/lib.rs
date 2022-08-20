@@ -181,11 +181,13 @@ impl<C: CkbClient> Assembler for AssemblerImpl<C> {
                 helper::make_personal_script(&self.project_code_hash, &self.project_id)
             };
             if let Some(data) = &output.data {
+                let capacity =
+                    Capacity::bytes(data.len()).unwrap().as_u64() + output.extra_capacity;
                 outputs.push(
                     CellOutput::new_builder()
                         .lock(output.lock_script.clone())
                         .type_(Some(type_).pack())
-                        .build_exact_capacity(Capacity::bytes(data.len()).unwrap())
+                        .build_exact_capacity(Capacity::shannons(capacity))
                         .unwrap(),
                 );
                 outputs_data.push(data.clone());
@@ -193,7 +195,7 @@ impl<C: CkbClient> Assembler for AssemblerImpl<C> {
                 outputs.push(
                     CellOutput::new_builder()
                         .lock(output.lock_script.clone())
-                        .build_exact_capacity(Capacity::zero())
+                        .build_exact_capacity(Capacity::shannons(output.extra_capacity))
                         .unwrap(),
                 );
                 outputs_data.push(Bytes::new());
