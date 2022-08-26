@@ -88,9 +88,9 @@ pub fn parse_requests_to_outputs(lua: &Lua, requests: &[KoRequest]) -> KoResult<
     let msg: Table = luac!(lua.globals().get("msg"));
     let cost_ckbs = Rc::new(RefCell::new(HashMap::new()));
     let ckbs = cost_ckbs.clone();
-    let ckb_cost = luac!(lua.create_function(move |lua, ckb: u64| {
+    let ckb_cost = luac!(lua.create_function(move |lua, ckb: f64| {
         let i: usize = lua.globals().get("i").expect("ckb_cost get i");
-        ckbs.borrow_mut().insert(i, ckb);
+        ckbs.borrow_mut().insert(i, (ckb * 100_000_000.0) as u64);
         Ok(true)
     }));
     luac!(msg.set("ckb_cost", ckb_cost));
@@ -99,9 +99,9 @@ pub fn parse_requests_to_outputs(lua: &Lua, requests: &[KoRequest]) -> KoResult<
         .iter()
         .enumerate()
         .map(|(i, request)| {
-            let previous_global: Table = {
+            let previous_global = {
                 let msg: Table = luac!(lua.globals().get("msg"));
-                luac!(msg.get("global"))
+                luac!(msg.get::<_, Table>("global")).clone()
             };
             match run_request(lua, request, i) {
                 Ok(output) => {

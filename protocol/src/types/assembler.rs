@@ -23,7 +23,7 @@ pub struct KoAssembleReceipt {
     pub global_json_data: Bytes,
     pub global_lockscript: Script,
     pub global_ckb: u64,
-    pub random_seeds: [u64; 2],
+    pub random_seeds: [i64; 2],
 }
 
 impl KoAssembleReceipt {
@@ -39,7 +39,7 @@ impl KoAssembleReceipt {
             seed_one.copy_from_slice(&random_bytes[..8]);
             let mut seed_two = [0u8; 8];
             seed_two.copy_from_slice(&random_bytes[8..]);
-            [u64::from_le_bytes(seed_one), u64::from_le_bytes(seed_two)]
+            [i64::from_le_bytes(seed_one), i64::from_le_bytes(seed_two)]
         };
         KoAssembleReceipt {
             requests,

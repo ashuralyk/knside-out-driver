@@ -37,11 +37,10 @@ async fn send_make_request_digest() {
         recipient: None,
         previous_cell: None,
     };
-    let response: KoMakeRequestDigestResponse = create_server_and_client(false)
+    let response: Result<KoMakeRequestDigestResponse, _> = create_server_and_client(false)
         .await
         .request("ko_makeRequestDigest", rpc_params!(params))
-        .await
-        .expect("server response");
+        .await;
     println!("response = {:?}", response);
 }
 
@@ -52,7 +51,7 @@ async fn call_contract_method() {
     // make digest
     let params = KoMakeRequestDigestParams {
         sender: OWNER_ADDRESS.into(),
-        contract_call: "battle_win()".into(),
+        contract_call: "claim_nfts()".into(),
         recipient: None,
         previous_cell: None,
     };
@@ -85,15 +84,15 @@ async fn call_contract_method() {
         .request("ko_sendRequestSignature", rpc_params!(params))
         .await
         .expect("server response");
-    println!("response = {}", hash);
+    println!("hash = {}", hash);
 
     // wait committed
-    let hash = H256::from_str(&hash).unwrap();
+    let hash = H256::from_str(&hash[2..]).unwrap();
     let committed_hash: Option<H256> = client
         .request("ko_waitRequestCommitted", rpc_params!(hash))
         .await
         .expect("server commit");
-    println!("committed = {:?}", committed_hash);
+    println!("committed = {}", hex::encode(&committed_hash.unwrap()));
 }
 
 #[tokio::test]

@@ -108,7 +108,7 @@ async fn request_project_request_cell() {
     println!("previous = {:?}", previous_cell);
 
     // create digest
-    let (digest, payment_ckb) = backend
+    let (digest, _) = backend
         .create_project_request_digest(
             OWNER_ADDRESS.into(),
             None,
@@ -118,7 +118,6 @@ async fn request_project_request_cell() {
         )
         .await
         .expect("create digest");
-    println!("payment_ckb = {}", payment_ckb);
 
     // sign and push transaction
     let tx = backend.peak_transaction(&digest).expect("peak");
@@ -131,12 +130,11 @@ async fn request_project_request_cell() {
     println!("send request success, hash = {}", hash);
 
     // check request committed
-    let committed_hash = backend
-        .check_project_request_committed(&hash, &PROJECT_VARS)
-        .await
-        .expect("check")
-        .unwrap();
-    println!("reqeust committed, hash = {}", committed_hash);
+    // let committed_hash = backend
+    //     .check_project_request_committed(&hash, &PROJECT_VARS)
+    //     .await
+    //     .expect("check");
+    // println!("reqeust committed, hash = {:?}", committed_hash);
 }
 
 #[tokio::test]

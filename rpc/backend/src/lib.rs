@@ -321,7 +321,7 @@ impl<C: CkbClient> Backend for BackendImpl<C> {
                     sender,
                 )))
                 .expect("EstimatePaymentCkb channel request");
-                receiver.recv().await.unwrap()
+                receiver.recv().await.unwrap()?
             } else {
                 0u64
             }
@@ -408,23 +408,13 @@ impl<C: CkbClient> Backend for BackendImpl<C> {
             .rpc_client
             .get_live_cell(&out_point.into(), false)
             .await?;
+        let mut find = false;
         if let Some(cell) = cell.cell {
             let lock = CellOutput::from(cell.output).lock();
             if lock.code_hash() == project_deps.project_code_hash.pack()
                 && lock.args().get(0) == Some(2u8.into())
             {
-                if let Some(rpc) = &self.context_rpc {
-                    let (sender, mut receiver) = unbounded_channel();
-                    rpc.send(KoContextRpcEcho::ListenRequestCommitted((
-                        transaction_hash.clone(),
-                        sender,
-                    )))
-                    .expect("ListenRequestCommitted channel request");
-                    let committed_hash = receiver.recv().await.unwrap()?;
-                    return Ok(Some(committed_hash));
-                } else {
-                    return Ok(None);
-                }
+                find = true;
             }
         } else {
             let tx = self.rpc_client.get_transaction(transaction_hash).await?;
@@ -435,10 +425,24 @@ impl<C: CkbClient> Backend for BackendImpl<C> {
                         if cell.lock().code_hash() == project_deps.project_code_hash.pack()
                             && cell.lock().args().get(0) == Some(2u8.into())
                         {
-                            return Ok(None);
+                            find = true;
                         }
                     }
                 }
+            }
+        }
+        if find {
+            if let Some(rpc) = &self.context_rpc {
+                let (sender, mut receiver) = unbounded_channel();
+                rpc.send(KoContextRpcEcho::ListenRequestCommitted((
+                    transaction_hash.clone(),
+                    sender,
+                )))
+                .expect("ListenRequestCommitted channel request");
+                let committed_hash = receiver.recv().await.unwrap()?;
+                return Ok(Some(committed_hash));
+            } else {
+                return Ok(None);
             }
         }
         Err(BackendError::InvalidRequestHash(transaction_hash.clone()).into())

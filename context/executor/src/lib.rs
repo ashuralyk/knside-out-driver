@@ -60,7 +60,7 @@ impl Executor for ExecutorImpl {
         project_owner: &H256,
         user_requests: &[KoRequest],
         project_lua_code: &Bytes,
-        random_seeds: &[u64; 2],
+        random_seeds: &[i64; 2],
     ) -> KoResult<KoExecuteReceipt> {
         let lua = self.prepare_lua_context(global_json_data, project_owner, project_lua_code)?;
         let math: Table = luac!(lua.globals().get("math"));
@@ -96,8 +96,8 @@ impl Executor for ExecutorImpl {
         let msg: Table = luac!(lua.globals().get("msg"));
         let payment_ckb = Rc::new(RefCell::new(0u64));
         let payment = payment_ckb.clone();
-        let ckb_cost = luac!(lua.create_function(move |_, ckb: u64| {
-            *payment.borrow_mut() = ckb;
+        let ckb_cost = luac!(lua.create_function(move |_, ckb: f64| {
+            *payment.borrow_mut() = (ckb * 100_000_000.0) as u64;
             Ok(true)
         }));
         luac!(msg.set("ckb_cost", ckb_cost));

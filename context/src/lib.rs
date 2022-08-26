@@ -104,7 +104,7 @@ impl<C: CkbClient> ContextImpl<C> {
                             &method_call,
                             &previous_json_data,
                             &recipient
-                        )?;
+                        );
                         response.send(payment_ckb).expect("EstimatePaymentCkb channel");
                     },
                     KoContextRpcEcho::ListenRequestCommitted((hash, response))=> {
@@ -144,7 +144,7 @@ impl<C: CkbClient> ContextImpl<C> {
             receipt.global_lockscript,
             0,
         )];
-
+        
         // trim unworkable requests from transaction inputs
         let mut request_hashes = tx
             .inputs()

@@ -8,7 +8,7 @@ pub enum KoContextRpcEcho {
     EstimatePaymentCkb(
         (
             (Script, String, String, Option<Script>),
-            UnboundedSender<u64>,
+            UnboundedSender<KoResult<u64>>,
         ),
     ),
     ListenRequestCommitted((H256, UnboundedSender<KoResult<H256>>)),

@@ -1,11 +1,11 @@
 # type_args is script_args which generates project type_id
-project_type_args = "0x71fee700e9468246fa4aa10dd37248d673dd36ee73689ad0c3592c89d6b599c6"
+project_type_args = "0xa033c093798f0ee671b70c44edb6a4825339fd297c1b516b80eea56e78c95e42"
 
 # the deployer of this project
 project_owner_privkey = "0x8d929e962f940f75aa32054f19a5ea2ce70ae30bfe4ff7cf2dbed70d556265df"
 
 # knside-out contract code_hash
-project_code_hash = "0x8f11b7a80bb50a518cd29170cbc72b2ab8ef94fc8297f75cfa9f8917d5057e4b"
+project_code_hash = "0x8680e03788eb830d44821e9e9cacfc3a30d38d48f2e439ab4e861d765454bd16"
 
 # url for connecting CKB node
 ckb_url = "http://127.0.0.1:8114/"
@@ -23,7 +23,7 @@ project_cell_deps = [
     # secp256k1
     { transaction_hash = "0xc6bffa9ca9a9dadfec83c0307eee18fe88e42a00d05068510d799e3e4ad3ee87", cell_index = 0, dep_type = 1 },
     # knside-out
-    { transaction_hash = "0xb769ef9ccc18b5a883a4a44f31217036458be38dbef874a10e69d8f5b0f322a0", cell_index = 0, dep_type = 0 },
+    { transaction_hash = "0x54c0774ffc8330216a8a8363f6b327c526d15be30830e55da3516c3913a5b413", cell_index = 0, dep_type = 0 },
 ]
 
 [drive_settings]
