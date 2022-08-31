@@ -1,14 +1,18 @@
+mod mock_rpc;
+
 use std::str::FromStr;
 
+use ko_backend::BackendImpl;
+use ko_protocol::ckb_jsonrpc_types::OutPoint;
 use ko_protocol::secp256k1::{Message, SecretKey};
 use ko_protocol::types::server::*;
 use ko_protocol::{ckb_sdk::SECP256K1, ckb_types::H256, hex, tokio, TestVars::*};
-use ko_rpc_backend::BackendImpl;
 use ko_rpc_client::RpcClient;
 use ko_rpc_server::RpcServer;
 
 use jsonrpsee::core::{client::ClientT, rpc_params};
 use jsonrpsee::http_client::{HttpClient, HttpClientBuilder};
+use mock_rpc::MockContextrpc;
 
 const JSONRPC_PORT: &str = "127.0.0.1:8090";
 
@@ -16,11 +20,10 @@ async fn create_server_and_client(with_server: bool) -> HttpClient {
     // start rpc server
     if with_server {
         let rpc_client = RpcClient::new(CKB_URL, CKB_INDEXER_URL);
-        let backend = BackendImpl::new(&rpc_client, None);
-        let handle =
-            RpcServer::<BackendImpl<RpcClient>>::start(JSONRPC_PORT, backend, &PROJECT_VARS)
-                .await
-                .expect("start rpc server");
+        let backend = BackendImpl::new(&rpc_client, MockContextrpc::default());
+        let handle = RpcServer::<_>::start(JSONRPC_PORT, backend, &PROJECT_VARS)
+            .await
+            .expect("start rpc server");
         Box::leak(Box::new(handle));
     }
     HttpClientBuilder::default()
@@ -31,16 +34,20 @@ async fn create_server_and_client(with_server: bool) -> HttpClient {
 #[tokio::test]
 async fn send_make_request_digest() {
     // send client request
-    let params = KoMakeRequestDigestParams {
-        sender: OWNER_ADDRESS.into(),
-        contract_call: "battle_win()".into(),
-        recipient: None,
-        previous_cell: None,
-    };
-    let response: Result<KoMakeRequestDigestResponse, _> = create_server_and_client(false)
-        .await
-        .request("ko_makeRequestDigest", rpc_params!(params))
-        .await;
+    let response: Result<KoMakeRequestTransactionDigestResponse, _> =
+        create_server_and_client(false)
+            .await
+            .request(
+                "ko_makeRequestTransactionDigest",
+                rpc_params!(
+                    String::from(OWNER_ADDRESS),
+                    String::from("battle_win()"),
+                    Option::<String>::None,
+                    Option::<OutPoint>::None,
+                    PROJECT_TYPE_ARGS
+                ),
+            )
+            .await;
     println!("response = {:?}", response);
 }
 
@@ -49,15 +56,18 @@ async fn call_contract_method() {
     let client = create_server_and_client(false).await;
 
     // make digest
-    let params = KoMakeRequestDigestParams {
-        sender: OWNER_ADDRESS.into(),
-        contract_call: "claim_nfts()".into(),
-        recipient: None,
-        previous_cell: None,
-    };
     let digest = {
-        let response: KoMakeRequestDigestResponse = client
-            .request("ko_makeRequestDigest", rpc_params!(params))
+        let response: KoMakeRequestTransactionDigestResponse = client
+            .request(
+                "ko_makeRequestTransactionDigest",
+                rpc_params!(
+                    String::from(OWNER_ADDRESS),
+                    String::from("battle_win()"),
+                    Option::<String>::None,
+                    Option::<OutPoint>::None,
+                    PROJECT_TYPE_ARGS
+                ),
+            )
             .await
             .expect("server response");
         println!("payment_ckb = {}", response.payment);
@@ -79,9 +89,11 @@ async fn call_contract_method() {
     let signature = hex::encode(&signature_bytes);
 
     // send transaction
-    let params = KoSendRequestSignatureParams { digest, signature };
     let hash: String = client
-        .request("ko_sendRequestSignature", rpc_params!(params))
+        .request(
+            "ko_sendTransactionSignature",
+            rpc_params!(digest, signature),
+        )
         .await
         .expect("server response");
     println!("hash = {}", hash);
@@ -89,7 +101,7 @@ async fn call_contract_method() {
     // wait committed
     let hash = H256::from_str(&hash[2..]).unwrap();
     let committed_hash: Option<H256> = client
-        .request("ko_waitRequestCommitted", rpc_params!(hash))
+        .request("ko_waitRequestTransactionCommitted", rpc_params!(hash))
         .await
         .expect("server commit");
     println!("committed = {}", hex::encode(&committed_hash.unwrap()));
@@ -100,7 +112,7 @@ async fn send_fetch_global_data() {
     // send client request
     let response: String = create_server_and_client(false)
         .await
-        .request("ko_fetchGlobalData", None)
+        .request("ko_fetchGlobalData", rpc_params!(PROJECT_TYPE_ARGS))
         .await
         .expect("server response");
     println!("response = {:?}", response);
@@ -111,7 +123,10 @@ async fn send_fetch_personal_data() {
     // send client request
     let response: KoFetchPersonalDataResponse = create_server_and_client(false)
         .await
-        .request("ko_fetchPersonalData", rpc_params!(OWNER_ADDRESS))
+        .request(
+            "ko_fetchPersonalData",
+            rpc_params!(OWNER_ADDRESS, PROJECT_TYPE_ARGS),
+        )
         .await
         .expect("server response");
     println!("response = {:?}", response);

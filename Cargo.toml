@@ -14,6 +14,7 @@ ko-context-assembler = { path = "./context/assembler" }
 ko-context-driver = { path = "./context/driver" }
 ko-context-executor = { path = "./context/executor" }
 ko-protocol = { path = "./protocol" }
+ko-backend = { path = "./backend" }
 ko-rpc = { path = "./rpc" }
 ko-rpc-client = { path = "./rpc/client" }
 
@@ -24,10 +25,10 @@ members = [
     "context/driver",
     "context/executor",
     
+    "backend",
     "protocol",
 
     "rpc",
-    "rpc/backend",
     "rpc/client",
     "rpc/server",
 ]

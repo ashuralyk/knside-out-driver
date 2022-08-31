@@ -11,7 +11,7 @@ pub trait Assembler {
     async fn generate_transaction_with_inputs_and_celldeps(
         &self,
         cell_number: u8,
-        cell_deps: &[CellDep],
+        extra_cell_dep: &CellDep,
     ) -> KoResult<(TransactionView, KoAssembleReceipt)>;
 
     async fn fill_transaction_with_outputs(

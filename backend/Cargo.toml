@@ -1,5 +1,5 @@
 [package]
-name = "ko-rpc-backend"
+name = "ko-backend"
 version = "0.1.0"
 edition = "2021"
 
@@ -9,8 +9,8 @@ edition = "2021"
 ckb-hash = "0.101"
 mlua = { version = "0.8", features = ["lua54", "serialize", "vendored"] }
 
-ko-protocol = { path = "../../protocol" }
+ko-protocol = { path = "../protocol" }
 
 [dev-dependencies]
-ko-context = { path = "../../context" }
-ko-rpc-client = { path = "../../rpc/client" }
+ko-context = { path = "../context" }
+ko-rpc-client = { path = "../rpc/client" }

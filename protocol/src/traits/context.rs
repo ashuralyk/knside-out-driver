@@ -1,25 +1,25 @@
-use crate::{async_trait, KoResult};
-use ckb_types::packed::{CellDep, Script};
-use ckb_types::H256;
+use ckb_types::{packed::Script, H256};
 use tokio::sync::mpsc::UnboundedSender;
 
-#[async_trait]
-pub trait Context: Send + Sync {
-    fn get_project_id(&self) -> H256;
+use crate::KoResult;
+
+pub trait ContextRpc: Send + Sync {
+    fn start_project_driver(&mut self, project_type_args: &H256) -> bool;
 
     fn estimate_payment_ckb(
         &self,
+        project_type_args: &H256,
         sender: &Script,
         method_call: &str,
         previous_json_data: &str,
         recipient: &Option<Script>,
-    ) -> KoResult<u64>;
+        response: UnboundedSender<KoResult<u64>>,
+    ) -> bool;
 
     fn listen_request_committed(
-        &mut self,
+        &self,
+        project_type_args: &H256,
         request_hash: &H256,
-        sender: UnboundedSender<KoResult<H256>>,
-    );
-
-    async fn run(mut self, project_cell_deps: &[CellDep]);
+        response: UnboundedSender<KoResult<H256>>,
+    ) -> bool;
 }

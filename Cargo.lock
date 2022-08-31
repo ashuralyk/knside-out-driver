@@ -1024,6 +1024,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "ko-backend"
+version = "0.1.0"
+dependencies = [
+ "ckb-hash 0.101.8",
+ "ko-context",
+ "ko-protocol",
+ "ko-rpc-client",
+ "mlua",
+]
+
+[[package]]
 name = "ko-config"
 version = "0.1.0"
 dependencies = [
@@ -1072,6 +1083,7 @@ name = "ko-driver"
 version = "0.1.0"
 dependencies = [
  "clap",
+ "ko-backend",
  "ko-config",
  "ko-context",
  "ko-context-assembler",
@@ -1105,21 +1117,10 @@ name = "ko-rpc"
 version = "0.1.0"
 dependencies = [
  "jsonrpsee",
+ "ko-backend",
  "ko-protocol",
- "ko-rpc-backend",
  "ko-rpc-client",
  "ko-rpc-server",
-]
-
-[[package]]
-name = "ko-rpc-backend"
-version = "0.1.0"
-dependencies = [
- "ckb-hash 0.101.8",
- "ko-context",
- "ko-protocol",
- "ko-rpc-client",
- "mlua",
 ]
 
 [[package]]

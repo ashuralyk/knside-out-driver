@@ -10,7 +10,13 @@ async fn drive_one() {
     // prepare parts
     let rpc_client = RpcClient::new(&CKB_URL, &CKB_INDEXER_URL);
     let privkey = SecretKey::from_slice(OWNER_PRIVATE_KEY.as_bytes()).expect("private key");
-    let (mut ctx, _) = ContextImpl::new(&rpc_client, &privkey, &PROJECT_VARS);
+    let (mut ctx, _) = ContextImpl::new(
+        &rpc_client,
+        &privkey,
+        &PROJECT_TYPE_ARGS,
+        &PROJECT_VARS,
+        &DRIVE_CONFIG,
+    );
 
     // prepare to make instance of context
     let project_dep = ctx
@@ -18,13 +24,8 @@ async fn drive_one() {
         .prepare_transaction_project_celldep()
         .await
         .expect("project dep");
-    let mut transaction_deps = PROJECT_VARS.project_cell_deps.clone();
-    transaction_deps.push(project_dep.cell_dep);
 
     // drive knside-out transaction
-    let hash = ctx
-        .drive(&project_dep.lua_code, &transaction_deps)
-        .await
-        .expect("drive");
+    let hash = ctx.drive(&project_dep).await.expect("drive");
     println!("hash = {}", hex::encode(&hash.unwrap_or(H256::default())));
 }

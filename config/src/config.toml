@@ -1,8 +1,8 @@
-# type_args is script_args which generates project type_id
-project_type_args = "0xa033c093798f0ee671b70c44edb6a4825339fd297c1b516b80eea56e78c95e42"
+# the default manager ckb address
+project_manager_address = "ckt1qyq93wzur9h9l6qwyk6d4dvkuufp6gvl08aszz5syl"
 
-# the deployer of this project
-project_owner_privkey = "0x8d929e962f940f75aa32054f19a5ea2ce70ae30bfe4ff7cf2dbed70d556265df"
+# the default manager for project global cell management
+project_manager_privkey = "0x8d929e962f940f75aa32054f19a5ea2ce70ae30bfe4ff7cf2dbed70d556265df"
 
 # knside-out contract code_hash
 project_code_hash = "0x8680e03788eb830d44821e9e9cacfc3a30d38d48f2e439ab4e861d765454bd16"

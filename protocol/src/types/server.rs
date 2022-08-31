@@ -1,29 +1,20 @@
 use ckb_jsonrpc_types::OutPoint;
-use ckb_types::H256;
 use derive_more::Constructor;
 use serde::{Deserialize, Serialize};
 use tokio::sync::Mutex;
 
 use crate::{traits::Backend, ProjectDeps};
 
-#[derive(Deserialize, Serialize)]
-pub struct KoMakeRequestDigestParams {
-    pub sender: String,
-    pub contract_call: String,
-    pub recipient: Option<String>,
-    pub previous_cell: Option<OutPoint>,
+#[derive(Deserialize, Serialize, Constructor, Debug)]
+pub struct KoMakeDeployTransactionDigestResponse {
+    pub digest: String,
+    pub project_type_args: String,
 }
 
 #[derive(Deserialize, Serialize, Constructor, Debug)]
-pub struct KoMakeRequestDigestResponse {
+pub struct KoMakeRequestTransactionDigestResponse {
     pub digest: String,
     pub payment: String,
-}
-
-#[derive(Deserialize, Serialize)]
-pub struct KoSendRequestSignatureParams {
-    pub digest: H256,
-    pub signature: String,
 }
 
 #[derive(Serialize, Deserialize, Constructor, Debug)]

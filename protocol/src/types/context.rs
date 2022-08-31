@@ -5,6 +5,7 @@ use crate::KoResult;
 
 #[derive(Debug)]
 pub enum KoContextRpcEcho {
+    #[allow(clippy::type_complexity)]
     EstimatePaymentCkb(
         (
             (Script, String, String, Option<Script>),

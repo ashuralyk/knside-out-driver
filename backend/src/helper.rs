@@ -8,7 +8,7 @@ use ko_protocol::ckb_types::packed::{CellInput, CellOutput, Script, ScriptOpt, W
 use ko_protocol::ckb_types::prelude::{Builder, Entity, Pack, Unpack};
 use ko_protocol::ckb_types::{bytes::Bytes, H256};
 use ko_protocol::serde_json;
-use ko_protocol::{traits::CkbClient, KoResult};
+use ko_protocol::{mol_flag_0, traits::CkbClient, KoResult};
 
 use crate::BackendError;
 
@@ -17,6 +17,21 @@ pub fn build_knsideout_script(code_hash: &H256, args: &[u8]) -> Script {
         .code_hash(code_hash.pack())
         .hash_type(ScriptHashType::Data.into())
         .args(args.pack())
+        .build()
+}
+
+pub fn build_global_type_script(project_code_hash: &H256, project_type_args: &H256) -> Script {
+    let project_id = Script::new_builder()
+        .code_hash(TYPE_ID_CODE_HASH.pack())
+        .hash_type(ScriptHashType::Type.into())
+        .args(project_type_args.as_bytes().pack())
+        .build()
+        .calc_script_hash()
+        .unpack();
+    Script::new_builder()
+        .code_hash(project_code_hash.pack())
+        .hash_type(ScriptHashType::Data.into())
+        .args(mol_flag_0(&project_id.0).as_slice().pack())
         .build()
 }
 
@@ -97,10 +112,23 @@ pub fn get_transaction_digest(tx: &TransactionView) -> H256 {
     message.into()
 }
 
-pub fn get_global_json_data(contract: &Bytes) -> KoResult<String> {
+pub fn parse_contract_code(contract: &Bytes) -> KoResult<Vec<u8>> {
     let lua = mlua::Lua::new();
-    lua.load(contract.as_ref())
-        .exec()
+    let function = lua
+        .load(contract.as_ref())
+        .into_function()
+        .map_err(|err| BackendError::BadContractByteCode(err.to_string()))?;
+    Ok(function.dump(true))
+}
+
+pub fn get_global_json_data(contract: &Bytes) -> KoResult<(String, Vec<u8>)> {
+    let lua = mlua::Lua::new();
+    let function = lua
+        .load(contract.as_ref())
+        .into_function()
+        .map_err(|err| BackendError::BadContractByteCode(err.to_string()))?;
+    function
+        .call::<_, ()>(())
         .map_err(|err| BackendError::BadContractByteCode(err.to_string()))?;
     let func_init_global: mlua::Function = lua
         .globals()
@@ -111,7 +139,7 @@ pub fn get_global_json_data(contract: &Bytes) -> KoResult<String> {
         .map_err(|err| BackendError::MissConstructFunction(err.to_string()))?;
     let global_data_json = serde_json::to_string(&global_data)
         .map_err(|err| BackendError::GlobalTableNotJsonify(err.to_string()))?;
-    Ok(global_data_json)
+    Ok((global_data_json, function.dump(true)))
 }
 
 pub fn calc_outputs_capacity(outputs: &[CellOutput], fee: &str) -> u64 {

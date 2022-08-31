@@ -1,0 +1,3 @@
+project_type_args = [
+    { hash = "0xa033c093798f0ee671b70c44edb6a4825339fd297c1b516b80eea56e78c95e42", enable = true }
+]

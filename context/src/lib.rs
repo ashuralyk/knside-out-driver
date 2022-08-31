@@ -4,15 +4,17 @@ use std::time::Duration;
 use ko_context_assembler::AssemblerImpl;
 use ko_context_driver::DriverImpl;
 use ko_context_executor::ExecutorImpl;
-use ko_protocol::ckb_types::packed::{CellDep, Script};
+use ko_protocol::ckb_types::packed::Script;
 use ko_protocol::ckb_types::prelude::Unpack;
 use ko_protocol::ckb_types::{bytes::Bytes, H256};
 use ko_protocol::secp256k1::SecretKey;
 use ko_protocol::tokio::sync::mpsc::{unbounded_channel, UnboundedReceiver, UnboundedSender};
-use ko_protocol::traits::{Assembler, CkbClient, Context, Driver, Executor};
-use ko_protocol::types::assembler::{KoCellOutput, KoRequest};
+use ko_protocol::tokio::task::JoinHandle;
+use ko_protocol::traits::{Assembler, CkbClient, ContextRpc, Driver, Executor};
+use ko_protocol::types::assembler::{KoCellOutput, KoProject, KoRequest};
+use ko_protocol::types::config::KoDriveConfig;
 use ko_protocol::types::context::KoContextRpcEcho;
-use ko_protocol::{async_trait, tokio, KoResult, ProjectDeps};
+use ko_protocol::{tokio, KoResult, ProjectDeps};
 
 #[cfg(test)]
 mod tests;
@@ -30,8 +32,8 @@ pub struct ContextImpl<C: CkbClient> {
     pub driver: DriverImpl<C>,
 
     drive_interval: Duration,
-    max_reqeusts_count: u8,
-    block_confirms_count: u8,
+    idle_duration: Duration,
+    config: KoDriveConfig,
 
     project_context: ProjectContext,
     rpc_receiver: UnboundedReceiver<KoContextRpcEcho>,
@@ -42,16 +44,18 @@ impl<C: CkbClient> ContextImpl<C> {
     pub fn new(
         rpc_client: &C,
         privkey: &SecretKey,
+        project_type_args: &H256,
         project_deps: &ProjectDeps,
+        config: &KoDriveConfig,
     ) -> (ContextImpl<C>, UnboundedSender<KoContextRpcEcho>) {
         let (sender, receiver) = unbounded_channel();
         let context = ContextImpl {
-            assembler: AssemblerImpl::new(rpc_client, project_deps),
+            assembler: AssemblerImpl::new(rpc_client, project_type_args, project_deps),
             executor: ExecutorImpl::new(),
             driver: DriverImpl::new(rpc_client, privkey),
-            drive_interval: Duration::from_secs(3),
-            max_reqeusts_count: 20,
-            block_confirms_count: 3,
+            drive_interval: Duration::ZERO,
+            idle_duration: Duration::ZERO,
+            config: config.clone(),
             project_context: ProjectContext::default(),
             rpc_receiver: receiver,
             listening_requests: HashMap::new(),
@@ -59,22 +63,8 @@ impl<C: CkbClient> ContextImpl<C> {
         (context, sender)
     }
 
-    pub fn set_drive_interval(&mut self, interval: u8) {
-        self.drive_interval = Duration::from_secs(interval as u64);
-    }
-
-    pub fn set_max_requests_count(&mut self, requests_count: u8) {
-        self.max_reqeusts_count = requests_count;
-    }
-
-    pub fn set_confirms_count(&mut self, confirms: u8) {
-        self.block_confirms_count = confirms;
-    }
-
-    pub async fn start_drive_loop(&mut self, project_cell_deps: &[CellDep]) -> KoResult<()> {
+    async fn start_drive_loop(&mut self) -> KoResult<()> {
         let project_dep = self.assembler.prepare_transaction_project_celldep().await?;
-        let mut transaction_deps = project_cell_deps.to_vec();
-        transaction_deps.insert(0, project_dep.cell_dep);
 
         let (project_owner, global_data) = self.assembler.get_project_owner_and_global().await?;
         self.project_context.contract_code = project_dep.lua_code.clone();
@@ -82,16 +72,21 @@ impl<C: CkbClient> ContextImpl<C> {
         self.project_context.global_json_data = global_data;
 
         println!("[INFO] knside-out drive server started, enter drive loop");
-        let startup_interval = self.drive_interval;
-        self.drive_interval = Duration::ZERO;
+        let drive_interval = Duration::from_secs(self.config.drive_interval_sec as u64);
+        let max_idle_duration = Duration::from_secs(self.config.kickout_duration_sec);
         loop {
             tokio::select! {
                 _ = tokio::time::sleep(self.drive_interval) => {
-                    if let Some(hash) = self.drive(&project_dep.lua_code, &transaction_deps).await? {
+                    if let Some(hash) = self.drive(&project_dep).await? {
                         println!("[INFO] transaction #{} confirmed", hash);
+                        self.idle_duration = Duration::ZERO;
                         self.drive_interval = Duration::ZERO;
                     } else {
-                        self.drive_interval = startup_interval;
+                        self.drive_interval = drive_interval;
+                        self.idle_duration += drive_interval;
+                        if self.idle_duration > max_idle_duration {
+                            break;
+                        }
                     }
                 }
 
@@ -113,19 +108,16 @@ impl<C: CkbClient> ContextImpl<C> {
                 }
             }
         }
+        Ok(())
     }
 
-    pub async fn drive(
-        &mut self,
-        project_lua_code: &Bytes,
-        project_cell_deps: &[CellDep],
-    ) -> KoResult<Option<H256>> {
+    pub(self) async fn drive(&mut self, project_dep: &KoProject) -> KoResult<Option<H256>> {
         // assemble knside-out transaction
         let (tx, receipt) = self
             .assembler
             .generate_transaction_with_inputs_and_celldeps(
-                self.max_reqeusts_count,
-                project_cell_deps,
+                self.config.max_reqeusts_count,
+                &project_dep.cell_dep,
             )
             .await?;
         if receipt.requests.is_empty() {
@@ -136,7 +128,7 @@ impl<C: CkbClient> ContextImpl<C> {
             &receipt.global_json_data,
             &project_owner,
             &receipt.requests,
-            project_lua_code,
+            &project_dep.lua_code,
             &receipt.random_seeds,
         )?;
         let mut cell_outputs = vec![KoCellOutput::new(
@@ -144,7 +136,7 @@ impl<C: CkbClient> ContextImpl<C> {
             receipt.global_lockscript,
             0,
         )];
-        
+
         // trim unworkable requests from transaction inputs
         let mut request_hashes = tx
             .inputs()
@@ -199,7 +191,11 @@ impl<C: CkbClient> ContextImpl<C> {
 
         // wait transaction has been confirmed for enough confirmations
         self.driver
-            .wait_transaction_committed(&hash, &self.drive_interval, self.block_confirms_count)
+            .wait_transaction_committed(
+                &hash,
+                &self.drive_interval,
+                self.config.block_confirms_count,
+            )
             .await?;
 
         // clear request listening callbacks
@@ -217,15 +213,8 @@ impl<C: CkbClient> ContextImpl<C> {
 
         Ok(Some(hash))
     }
-}
 
-#[async_trait]
-impl<C: CkbClient> Context for ContextImpl<C> {
-    fn get_project_id(&self) -> H256 {
-        self.assembler.get_project_id()
-    }
-
-    fn estimate_payment_ckb(
+    pub fn estimate_payment_ckb(
         &self,
         sender: &Script,
         method_call: &str,
@@ -248,7 +237,7 @@ impl<C: CkbClient> Context for ContextImpl<C> {
         )
     }
 
-    fn listen_request_committed(
+    pub fn listen_request_committed(
         &mut self,
         request_hash: &H256,
         sender: UnboundedSender<KoResult<H256>>,
@@ -256,12 +245,115 @@ impl<C: CkbClient> Context for ContextImpl<C> {
         self.listening_requests.insert(request_hash.clone(), sender);
     }
 
-    async fn run(mut self, project_cell_deps: &[CellDep]) {
+    pub async fn run(mut self) {
         loop {
-            if let Err(error) = self.start_drive_loop(project_cell_deps).await {
+            if let Err(error) = self.start_drive_loop().await {
                 println!("[ERROR] {}", error);
             }
             tokio::time::sleep(self.drive_interval).await;
         }
+    }
+}
+
+pub struct ContextMgr<C: CkbClient> {
+    rpc_client: C,
+    private_key: SecretKey,
+    project_deps: ProjectDeps,
+    driver_config: KoDriveConfig,
+    context_pool: HashMap<H256, (JoinHandle<()>, UnboundedSender<KoContextRpcEcho>)>,
+}
+
+impl<C: CkbClient + 'static> ContextMgr<C> {
+    pub fn new(
+        rpc_client: &C,
+        private_key: &SecretKey,
+        project_deps: &ProjectDeps,
+        driver_config: &KoDriveConfig,
+    ) -> Self {
+        ContextMgr {
+            rpc_client: rpc_client.clone(),
+            private_key: *private_key,
+            project_deps: project_deps.clone(),
+            driver_config: driver_config.clone(),
+            context_pool: HashMap::new(),
+        }
+    }
+
+    pub fn recover_contexts(&mut self, project_type_args_list: Vec<(H256, bool)>) {
+        project_type_args_list
+            .into_iter()
+            .for_each(|(hash, running)| {
+                if running {
+                    self.start_project_driver(&hash);
+                } else {
+                    let (sender, _) = unbounded_channel();
+                    self.context_pool
+                        .insert(hash, (tokio::spawn(async {}), sender));
+                }
+            });
+    }
+}
+
+impl<C: CkbClient + 'static> ContextRpc for ContextMgr<C> {
+    fn start_project_driver(&mut self, project_type_args: &H256) -> bool {
+        if let Some((ctx, _)) = self.context_pool.get(project_type_args) {
+            if !ctx.is_finished() {
+                return false;
+            }
+        }
+        let (ctx, rpc) = ContextImpl::new(
+            &self.rpc_client,
+            &self.private_key,
+            project_type_args,
+            &self.project_deps,
+            &self.driver_config,
+        );
+        self.context_pool
+            .insert(project_type_args.clone(), (tokio::spawn(ctx.run()), rpc));
+        true
+    }
+
+    fn estimate_payment_ckb(
+        &self,
+        project_type_args: &H256,
+        sender: &Script,
+        method_call: &str,
+        previous_json_data: &str,
+        recipient: &Option<Script>,
+        response: UnboundedSender<KoResult<u64>>,
+    ) -> bool {
+        if let Some((ctx, rpc_sender)) = self.context_pool.get(project_type_args) {
+            if !ctx.is_finished() {
+                let params = KoContextRpcEcho::EstimatePaymentCkb((
+                    (
+                        sender.clone(),
+                        method_call.into(),
+                        previous_json_data.into(),
+                        recipient.clone(),
+                    ),
+                    response,
+                ));
+                rpc_sender.send(params).unwrap();
+                return true;
+            }
+        }
+        false
+    }
+
+    fn listen_request_committed(
+        &self,
+        project_type_args: &H256,
+        request_hash: &H256,
+        response: UnboundedSender<KoResult<H256>>,
+    ) -> bool {
+        if let Some((ctx, rpc_sender)) = self.context_pool.get(project_type_args) {
+            if ctx.is_finished() {
+                let params =
+                    KoContextRpcEcho::ListenRequestCommitted((request_hash.clone(), response));
+                rpc_sender.send(params).unwrap();
+                return true;
+            }
+        }
+        false
     }
 }

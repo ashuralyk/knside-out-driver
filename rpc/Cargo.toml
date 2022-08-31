@@ -7,7 +7,7 @@ edition = "2021"
 
 [dependencies]
 ko-protocol = { path = "../protocol" }
-ko-rpc-backend = { path = "./backend" }
+ko-backend = { path = "../backend" }
 ko-rpc-server = { path = "./server" }
 
 [dev-dependencies]

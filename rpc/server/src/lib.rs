@@ -3,8 +3,9 @@ use std::sync::Arc;
 
 use jsonrpsee::http_server::{HttpServerBuilder, HttpServerHandle};
 use jsonrpsee::{core::Error, proc_macros::rpc, types::error::CallError};
+use ko_protocol::ckb_jsonrpc_types::OutPoint;
 use ko_protocol::ckb_sdk::HumanCapacity;
-use ko_protocol::ckb_types::H256;
+use ko_protocol::ckb_types::{bytes::Bytes, H256};
 use ko_protocol::tokio::sync::Mutex;
 use ko_protocol::traits::Backend;
 use ko_protocol::ProjectDeps;
@@ -20,26 +21,54 @@ trait KnsideRpc {
     #[method(name = "ko_version")]
     async fn version(&self) -> RpcResult<String>;
 
-    #[method(name = "ko_makeRequestDigest")]
-    async fn make_request_digest(
+    #[method(name = "ko_makeDeployTransactionDigest")]
+    async fn make_deploy_transaction_digest(
         &self,
-        payload: KoMakeRequestDigestParams,
-    ) -> RpcResult<KoMakeRequestDigestResponse>;
+        sender: String,
+        contract_code: String,
+        use_management: bool,
+    ) -> RpcResult<KoMakeDeployTransactionDigestResponse>;
 
-    #[method(name = "ko_sendRequestSignature")]
-    async fn send_request_signature(
+    #[method(name = "ko_makeUpgradeTransactionDigest")]
+    async fn make_upgrade_transaction_digest(
         &self,
-        payload: KoSendRequestSignatureParams,
+        sender: String,
+        new_contract_code: String,
+        project_type_args: H256,
     ) -> RpcResult<H256>;
 
-    #[method(name = "ko_waitRequestCommitted")]
-    async fn wait_request_committed(&self, request_hash: H256) -> RpcResult<Option<H256>>;
+    #[method(name = "ko_makeRequestTransactionDigest")]
+    async fn make_request_transaction_digest(
+        &self,
+        sender: String,
+        contract_call: String,
+        recipient: Option<String>,
+        previous_cell: Option<OutPoint>,
+        project_type_args: H256,
+    ) -> RpcResult<KoMakeRequestTransactionDigestResponse>;
+
+    #[method(name = "ko_sendTransactionSignature")]
+    async fn send_transaction_signature(&self, digest: H256, signature: String) -> RpcResult<H256>;
+
+    #[method(name = "ko_waitRequestTransactionCommitted")]
+    async fn wait_request_transaction_committed(
+        &self,
+        request_hash: H256,
+        project_type_args: H256,
+    ) -> RpcResult<Option<H256>>;
+
+    #[method(name = "ko_mangeGlobalDriver")]
+    async fn manage_global_driver(&self, project_type_args: H256) -> RpcResult<()>;
 
     #[method(name = "ko_fetchGlobalData")]
-    async fn fetch_global_data(&self) -> RpcResult<String>;
+    async fn fetch_global_data(&self, project_type_args: H256) -> RpcResult<String>;
 
     #[method(name = "ko_fetchPersonalData")]
-    async fn fetch_personal_data(&self, address: String) -> RpcResult<KoFetchPersonalDataResponse>;
+    async fn fetch_personal_data(
+        &self,
+        address: String,
+        project_type_args: H256,
+    ) -> RpcResult<KoFetchPersonalDataResponse>;
 }
 
 pub struct RpcServer<B: Backend + 'static> {
@@ -54,41 +83,96 @@ impl<B: Backend + 'static> KnsideRpcServer for RpcServer<B> {
         Ok("1.0.0".into())
     }
 
-    async fn make_request_digest(
+    async fn make_deploy_transaction_digest(
         &self,
-        payload: KoMakeRequestDigestParams,
-    ) -> RpcResult<KoMakeRequestDigestResponse> {
+        sender: String,
+        contract_code: String,
+        use_management: bool,
+    ) -> RpcResult<KoMakeDeployTransactionDigestResponse> {
         println!(
-            " [RPC] receive `make_request_digest` rpc call <= {}({})",
-            payload.sender, payload.contract_call
+            " [RPC] receive `make_deploy_transaction_digest` rpc call <= {}({})",
+            sender, use_management
         );
+        let contract = hex::decode(contract_code).map_err(|err| Error::Custom(err.to_string()))?;
         let mut backend = self.ctx.backend.lock().await;
-        let (digest, payment_ckb) = backend
-            .create_project_request_digest(
-                payload.sender,
-                payload.recipient,
-                payload.previous_cell.map(|v| v.into()),
-                payload.contract_call,
+        let (digest, project_type_args) = backend
+            .create_project_deploy_digest(
+                Bytes::from(contract),
+                sender,
+                use_management,
                 &self.ctx.project_deps,
             )
             .await
             .map_err(|err| Error::Custom(err.to_string()))?;
-        let result = KoMakeRequestDigestResponse::new(
+        let result = KoMakeDeployTransactionDigestResponse::new(
+            hex::encode(&digest),
+            hex::encode(project_type_args),
+        );
+        Ok(result)
+    }
+
+    async fn make_upgrade_transaction_digest(
+        &self,
+        sender: String,
+        new_contract_code: String,
+        project_type_args: H256,
+    ) -> RpcResult<H256> {
+        println!(
+            " [RPC] receive `make_upgrade_transaction_digest` rpc call <= {}({})",
+            sender, project_type_args
+        );
+        let contract =
+            hex::decode(new_contract_code).map_err(|err| Error::Custom(err.to_string()))?;
+        let mut backend = self.ctx.backend.lock().await;
+        let digest = backend
+            .create_project_upgrade_digest(
+                Bytes::from(contract),
+                sender,
+                &project_type_args,
+                &self.ctx.project_deps,
+            )
+            .await
+            .map_err(|err| Error::Custom(err.to_string()))?;
+        Ok(digest)
+    }
+
+    async fn make_request_transaction_digest(
+        &self,
+        sender: String,
+        contract_call: String,
+        recipient: Option<String>,
+        previous_cell: Option<OutPoint>,
+        project_type_args: H256,
+    ) -> RpcResult<KoMakeRequestTransactionDigestResponse> {
+        println!(
+            " [RPC] receive `make_request_transaction_digest` rpc call <= {}({})",
+            sender, contract_call
+        );
+        let mut backend = self.ctx.backend.lock().await;
+        let (digest, payment_ckb) = backend
+            .create_project_request_digest(
+                sender,
+                recipient,
+                previous_cell.map(|v| v.into()),
+                contract_call,
+                &project_type_args,
+                &self.ctx.project_deps,
+            )
+            .await
+            .map_err(|err| Error::Custom(err.to_string()))?;
+        let result = KoMakeRequestTransactionDigestResponse::new(
             hex::encode(&digest),
             HumanCapacity::from(payment_ckb).to_string(),
         );
         Ok(result)
     }
 
-    async fn send_request_signature(
-        &self,
-        payload: KoSendRequestSignatureParams,
-    ) -> RpcResult<H256> {
+    async fn send_transaction_signature(&self, digest: H256, signature: String) -> RpcResult<H256> {
         println!(
-            " [RPC] receive `send_request_signature` rpc call <= digest({})",
-            payload.digest
+            " [RPC] receive `send_transaction_signature` rpc call <= digest({})",
+            digest
         );
-        let signature = hex::decode(payload.signature).map_err(|_| {
+        let signature = hex::decode(signature).map_err(|_| {
             Error::Call(CallError::InvalidParams(
                 RpcServerError::InvalidSignatureHexBytes.into(),
             ))
@@ -105,50 +189,77 @@ impl<B: Backend + 'static> KnsideRpcServer for RpcServer<B> {
             .backend
             .lock()
             .await
-            .send_transaction_to_ckb(&payload.digest, &signature_bytes)
+            .send_transaction_to_ckb(&digest, &signature_bytes)
             .await
             .map_err(|err| Error::Custom(err.to_string()))?
             .ok_or_else(|| Error::Custom(RpcServerError::SendSignature.to_string()))
     }
 
-    async fn wait_request_committed(&self, request_hash: H256) -> RpcResult<Option<H256>> {
+    async fn wait_request_transaction_committed(
+        &self,
+        request_hash: H256,
+        project_type_args: H256,
+    ) -> RpcResult<Option<H256>> {
         println!(
-            " [RPC] receive `wait_request_committed` rpc call <= hash({})",
+            " [RPC] receive `wait_request_transaction_committed` rpc call <= hash({})",
             hex::encode(&request_hash)
         );
         self.ctx
             .backend
             .lock()
             .await
-            .check_project_request_committed(&request_hash, &self.ctx.project_deps)
+            .check_project_request_committed(
+                &request_hash,
+                &project_type_args,
+                &self.ctx.project_deps,
+            )
             .await
             .map_err(|err| Error::Custom(err.to_string()))
     }
 
-    async fn fetch_global_data(&self) -> RpcResult<String> {
+    async fn manage_global_driver(&self, project_type_args: H256) -> RpcResult<()> {
+        println!(
+            " [RPC] receive `manage_global_drive` rpc call => {}",
+            hex::encode(&project_type_args)
+        );
+        self.ctx
+            .backend
+            .lock()
+            .await
+            .drive_project_on_management(&project_type_args, &self.ctx.project_deps)
+            .await
+            .map_err(|err| Error::Custom(err.to_string()))?;
+        Ok(())
+    }
+
+    async fn fetch_global_data(&self, project_type_args: H256) -> RpcResult<String> {
         let global_data = self
             .ctx
             .backend
             .lock()
             .await
-            .search_global_data(&self.ctx.project_deps)
+            .search_global_data(&project_type_args, &self.ctx.project_deps)
             .await
             .map_err(|err| Error::Custom(err.to_string()));
         println!(
             " [RPC] receive `fetch_global_data` rpc call => {:?}",
             global_data
         );
-        return global_data;
+        global_data
     }
 
-    async fn fetch_personal_data(&self, address: String) -> RpcResult<KoFetchPersonalDataResponse> {
+    async fn fetch_personal_data(
+        &self,
+        address: String,
+        project_type_args: H256,
+    ) -> RpcResult<KoFetchPersonalDataResponse> {
         println!(" [RPC] receive `fetch_global_data` rpc call <= {}", address);
         let personal_data = self
             .ctx
             .backend
             .lock()
             .await
-            .search_personal_data(address, &self.ctx.project_deps)
+            .search_personal_data(address, &project_type_args, &self.ctx.project_deps)
             .await
             .map_err(|err| Error::Custom(err.to_string()))?
             .into_iter()

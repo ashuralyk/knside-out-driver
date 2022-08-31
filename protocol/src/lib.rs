@@ -1,6 +1,9 @@
 pub mod traits;
 pub mod types;
 
+use std::convert::TryFrom;
+use std::str::FromStr;
+
 pub use async_trait::async_trait;
 pub use ckb_jsonrpc_types;
 pub use ckb_sdk;
@@ -16,46 +19,54 @@ pub use tokio;
 pub use types::error::KoResult;
 pub use types::generated::*;
 
+use ckb_sdk::Address;
 use ckb_types::{packed::CellDep, H256};
 use types::config::KoCellDep;
 
 #[derive(Clone)]
 pub struct ProjectDeps {
+    pub project_manager: Address,
     pub project_code_hash: H256,
-    pub project_type_args: H256,
     pub project_cell_deps: Vec<CellDep>,
 }
 
 impl ProjectDeps {
-    pub fn new(code_hash: &H256, type_args: &H256, cell_deps: &[KoCellDep]) -> Self {
+    pub fn new(code_hash: &H256, manager_address: &Address, cell_deps: &[KoCellDep]) -> Self {
         let cell_deps = cell_deps.iter().map(|dep| dep.into()).collect::<Vec<_>>();
         ProjectDeps {
+            project_manager: manager_address.clone(),
             project_code_hash: code_hash.clone(),
-            project_type_args: type_args.clone(),
             project_cell_deps: cell_deps,
         }
     }
 }
 
-impl From<&types::config::KoConfig> for ProjectDeps {
-    fn from(config: &types::config::KoConfig) -> Self {
-        ProjectDeps {
-            project_code_hash: config.project_code_hash.clone(),
-            project_type_args: config.project_type_args.clone(),
-            project_cell_deps: config
-                .project_cell_deps
-                .iter()
-                .map(|v| v.into())
-                .collect::<Vec<_>>(),
+impl TryFrom<&types::config::KoConfig> for ProjectDeps {
+    type Error = String;
+
+    fn try_from(config: &types::config::KoConfig) -> Result<Self, Self::Error> {
+        match Address::from_str(&config.project_manager_address) {
+            Ok(address) => Ok(ProjectDeps {
+                project_manager: address,
+                project_code_hash: config.project_code_hash.clone(),
+                project_cell_deps: config
+                    .project_cell_deps
+                    .iter()
+                    .map(|v| v.into())
+                    .collect::<Vec<_>>(),
+            }),
+            Err(err) => Err(err),
         }
     }
 }
 
 #[allow(non_snake_case)]
 pub mod TestVars {
+    use crate::ckb_sdk::Address;
     use crate::ckb_types::{core::DepType, h256, H256};
-    use crate::types::config::KoCellDep;
+    use crate::types::config::{KoCellDep, KoDriveConfig};
     use crate::{lazy_static, ProjectDeps};
+    use std::str::FromStr;
 
     pub const CKB_URL: &str = "http://127.0.0.1:8114/";
     pub const CKB_INDEXER_URL: &str = "http://127.0.0.1:8116/";
@@ -86,11 +97,12 @@ pub mod TestVars {
     lazy_static! {
         pub static ref PROJECT_VARS: ProjectDeps = ProjectDeps::new(
             &PROJECT_CODE_HASH,
-            &PROJECT_TYPE_ARGS,
+            &Address::from_str(OWNER_ADDRESS).unwrap(),
             &[
                 KoCellDep::new(SECP256K1_TX_HASH.clone(), 0, DepType::DepGroup.into()),
                 KoCellDep::new(KNSIDEOUT_TX_HASH.clone(), 0, DepType::Code.into()),
             ]
         );
+        pub static ref DRIVE_CONFIG: KoDriveConfig = KoDriveConfig::new(3, 10, 3, 100);
     }
 }

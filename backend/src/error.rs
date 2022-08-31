@@ -48,6 +48,12 @@ pub enum BackendError {
 
     #[display(fmt = "Request hash not found: {}", _0)]
     InvalidRequestHash(H256),
+
+    #[display(fmt = "Cannot find managed global cell, type_args = {}", _0)]
+    MissManagedGlobalCell(H256),
+
+    #[display(fmt = "Porject is already managed, type_args = {}", _0)]
+    AlreadyManagedProject(H256),
 }
 
 impl std::error::Error for BackendError {}

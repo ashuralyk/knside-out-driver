@@ -20,22 +20,28 @@ pub struct AssemblerImpl<C: CkbClient> {
     project_id: H256,
     project_id_args: H256,
     project_code_hash: H256,
+    project_cell_deps: Vec<CellDep>,
 }
 
 impl<C: CkbClient> AssemblerImpl<C> {
-    pub fn new(rpc_client: &C, project_deps: &ProjectDeps) -> AssemblerImpl<C> {
+    pub fn new(
+        rpc_client: &C,
+        project_type_args: &H256,
+        project_deps: &ProjectDeps,
+    ) -> AssemblerImpl<C> {
         let project_id = Script::new_builder()
             .code_hash(TYPE_ID_CODE_HASH.pack())
             .hash_type(ScriptHashType::Type.into())
-            .args(project_deps.project_type_args.as_bytes().pack())
+            .args(project_type_args.as_bytes().pack())
             .build()
             .calc_script_hash()
             .unpack();
         AssemblerImpl {
             project_id,
-            project_id_args: project_deps.project_type_args.clone(),
+            project_id_args: project_type_args.clone(),
             rpc_client: rpc_client.clone(),
             project_code_hash: project_deps.project_code_hash.clone(),
+            project_cell_deps: project_deps.project_cell_deps.clone(),
         }
     }
 
@@ -69,19 +75,24 @@ impl<C: CkbClient> Assembler for AssemblerImpl<C> {
     async fn generate_transaction_with_inputs_and_celldeps(
         &self,
         cell_number: u8,
-        cell_deps: &[CellDep],
+        extra_cell_dep: &CellDep,
     ) -> KoResult<(TransactionView, KoAssembleReceipt)> {
         // find project global cell
         let global_cell =
             helper::search_global_cell(&self.rpc_client, &self.project_code_hash, &self.project_id)
                 .await?;
+        let cell_deps = {
+            let mut cell_deps = self.project_cell_deps.clone();
+            cell_deps.push(extra_cell_dep.clone());
+            cell_deps
+        };
         let mut tx = TransactionView::new_advanced_builder()
             .input(
                 CellInput::new_builder()
                     .previous_output(global_cell.out_point)
                     .build(),
             )
-            .cell_deps(cell_deps.to_vec())
+            .cell_deps(cell_deps)
             .build();
         // fill transaction inputs and collect KnsideOut requests
         let mut requests = vec![];

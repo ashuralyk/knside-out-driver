@@ -2,9 +2,9 @@ use ckb_types::packed::{CellDep, OutPoint};
 use ckb_types::prelude::{Builder, Entity, Pack};
 use ckb_types::H256;
 use derive_more::Constructor;
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 
-#[derive(Deserialize, Clone, Constructor, Debug)]
+#[derive(Deserialize, Clone, Constructor)]
 pub struct KoCellDep {
     pub transaction_hash: H256,
     pub cell_index: u32,
@@ -23,17 +23,18 @@ impl From<&KoCellDep> for CellDep {
     }
 }
 
-#[derive(Deserialize, Debug)]
+#[derive(Deserialize, Clone, Constructor)]
 pub struct KoDriveConfig {
     pub drive_interval_sec: u8,
     pub max_reqeusts_count: u8,
     pub block_confirms_count: u8,
+    pub kickout_duration_sec: u64,
 }
 
-#[derive(Deserialize, Debug)]
+#[derive(Deserialize)]
 pub struct KoConfig {
-    pub project_type_args: H256,
-    pub project_owner_privkey: H256,
+    pub project_manager_address: String,
+    pub project_manager_privkey: H256,
     pub project_code_hash: H256,
     pub ckb_url: String,
     pub ckb_indexer_url: String,
@@ -45,5 +46,26 @@ pub struct KoConfig {
 impl AsRef<KoConfig> for KoConfig {
     fn as_ref(&self) -> &Self {
         self
+    }
+}
+
+#[derive(Deserialize, Serialize, Constructor, Clone)]
+pub struct KoTypeArgsItem {
+    pub hash: H256,
+    pub enable: bool,
+}
+
+#[derive(Deserialize, Serialize, Constructor)]
+pub struct KoConfigTypeArgs {
+    pub project_type_args: Vec<KoTypeArgsItem>,
+}
+
+impl From<KoConfigTypeArgs> for Vec<(H256, bool)> {
+    fn from(config: KoConfigTypeArgs) -> Self {
+        config
+            .project_type_args
+            .iter()
+            .map(|v| (v.hash.clone(), v.enable))
+            .collect()
     }
 }
