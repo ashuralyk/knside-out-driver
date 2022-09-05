@@ -40,6 +40,7 @@ pub struct KoConfig {
     pub ckb_url: String,
     pub ckb_indexer_url: String,
     pub rpc_endpoint: String,
+    pub persist_interval_sec: u64,
     pub project_cell_deps: Vec<KoCellDep>,
     pub drive_settings: KoDriveConfig,
 }

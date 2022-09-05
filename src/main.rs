@@ -8,6 +8,8 @@ use ko_protocol::{log, secp256k1::SecretKey, tokio, KoResult, Logger, ProjectDep
 use ko_rpc::RpcServerRuntime;
 use ko_rpc_client::RpcClient;
 
+const PROJECT_TYPE_ARGS_TOML: &str = ".project_type_args.toml";
+
 #[tokio::main]
 async fn main() -> KoResult<()> {
     // initail Command line options
@@ -31,6 +33,7 @@ async fn main() -> KoResult<()> {
 
     let config_path = matches.value_of("config_path").unwrap();
     let config = ko_config::load_file(config_path)?;
+    let config_type_args = ko_config::load_type_args_file(PROJECT_TYPE_ARGS_TOML)?;
     let project_deps: &ProjectDeps = &config.as_ref().try_into().expect("config");
 
     // initail CKB rcp client
@@ -45,8 +48,19 @@ async fn main() -> KoResult<()> {
         project_deps,
         &config.drive_settings,
     );
-    let config_type_args = ko_config::load_type_args_file(".project_type_args.toml")?;
-    context_mgr.recover_contexts(config_type_args.into());
+    context_mgr.recover_contexts(config_type_args.into()).await;
+
+    tokio::spawn(async move {
+        loop {
+            tokio::select! {
+                _ = tokio::time::sleep(std::time::Duration::from_secs(config.persist_interval_sec)) => {
+                    let contexts_status = ContextMgr::<RpcClient>::dump_contexts_status().await;
+                    ko_config::save_type_args_file(contexts_status, PROJECT_TYPE_ARGS_TOML)
+                        .expect("save config");
+                }
+            }
+        }
+    });
 
     // initail rpc backend
     let backend = BackendImpl::new(&rpc_client, context_mgr);

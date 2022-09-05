@@ -319,14 +319,17 @@ impl<C: CkbClient, R: ContextRpc> Backend for BackendImpl<C, R> {
         // request payment ckb of this call
         let payment_ckb = {
             let (sender, mut receiver) = unbounded_channel();
-            let success = self.context_rpc.estimate_payment_ckb(
-                project_type_args,
-                &secp256k1_script,
-                &function_call,
-                &previous_json_data,
-                &recipient_secp256k1_script,
-                sender,
-            );
+            let success = self
+                .context_rpc
+                .estimate_payment_ckb(
+                    project_type_args,
+                    &secp256k1_script,
+                    &function_call,
+                    &previous_json_data,
+                    &recipient_secp256k1_script,
+                    sender,
+                )
+                .await;
             if success {
                 receiver.recv().await.unwrap()?
             } else {
@@ -441,11 +444,10 @@ impl<C: CkbClient, R: ContextRpc> Backend for BackendImpl<C, R> {
         }
         if find {
             let (sender, mut receiver) = unbounded_channel();
-            let success = self.context_rpc.listen_request_committed(
-                project_type_args,
-                transaction_hash,
-                sender,
-            );
+            let success = self
+                .context_rpc
+                .listen_request_committed(project_type_args, transaction_hash, sender)
+                .await;
             if success {
                 let committed_hash = receiver.recv().await.unwrap()?;
                 return Ok(Some(committed_hash));
@@ -483,7 +485,11 @@ impl<C: CkbClient, R: ContextRpc> Backend for BackendImpl<C, R> {
         if result.objects.is_empty() {
             return Err(BackendError::MissManagedGlobalCell(project_type_args.clone()).into());
         }
-        if !self.context_rpc.start_project_driver(project_type_args) {
+        if !self
+            .context_rpc
+            .start_project_driver(project_type_args)
+            .await
+        {
             return Err(BackendError::AlreadyManagedProject(project_type_args.clone()).into());
         }
         Ok(())

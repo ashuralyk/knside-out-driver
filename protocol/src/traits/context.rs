@@ -1,12 +1,13 @@
 use ckb_types::packed::Script;
 use tokio::sync::mpsc::UnboundedSender;
 
-use crate::{KoResult, H256};
+use crate::{async_trait, KoResult, H256};
 
+#[async_trait]
 pub trait ContextRpc: Send + Sync {
-    fn start_project_driver(&mut self, project_type_args: &H256) -> bool;
+    async fn start_project_driver(&mut self, project_type_args: &H256) -> bool;
 
-    fn estimate_payment_ckb(
+    async fn estimate_payment_ckb(
         &self,
         project_type_args: &H256,
         sender: &Script,
@@ -16,7 +17,7 @@ pub trait ContextRpc: Send + Sync {
         response: UnboundedSender<KoResult<u64>>,
     ) -> bool;
 
-    fn listen_request_committed(
+    async fn listen_request_committed(
         &self,
         project_type_args: &H256,
         request_hash: &H256,

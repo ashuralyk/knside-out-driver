@@ -1,17 +1,18 @@
 use ko_protocol::ckb_types::packed::Script;
 use ko_protocol::tokio::sync::mpsc::UnboundedSender;
 use ko_protocol::traits::ContextRpc;
-use ko_protocol::{KoResult, H256};
+use ko_protocol::{async_trait, KoResult, H256};
 
 #[derive(Default, Clone, Copy)]
 pub struct MockContextrpc {}
 
+#[async_trait]
 impl ContextRpc for MockContextrpc {
-    fn start_project_driver(&mut self, _project_type_args: &H256) -> bool {
+    async fn start_project_driver(&mut self, _project_type_args: &H256) -> bool {
         false
     }
 
-    fn estimate_payment_ckb(
+    async fn estimate_payment_ckb(
         &self,
         _project_type_args: &H256,
         _sender: &Script,
@@ -23,7 +24,7 @@ impl ContextRpc for MockContextrpc {
         false
     }
 
-    fn listen_request_committed(
+    async fn listen_request_committed(
         &self,
         _project_type_args: &H256,
         _request_hash: &H256,

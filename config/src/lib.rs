@@ -1,5 +1,5 @@
 use ko_protocol::types::config::{KoConfig, KoConfigTypeArgs, KoTypeArgsItem};
-use ko_protocol::KoResult;
+use ko_protocol::{KoResult, H256};
 
 mod error;
 use error::ConfigError;
@@ -20,8 +20,12 @@ pub fn load_type_args_file(path: &str) -> KoResult<KoConfigTypeArgs> {
     Ok(config)
 }
 
-pub fn save_type_args_file(type_args_items: &[KoTypeArgsItem], path: &str) -> KoResult<()> {
-    let config = KoConfigTypeArgs::new(type_args_items.to_vec());
+pub fn save_type_args_file(type_args_items: Vec<(H256, bool)>, path: &str) -> KoResult<()> {
+    let values = type_args_items
+        .into_iter()
+        .map(|(hash, enable)| KoTypeArgsItem::new(hash, enable))
+        .collect();
+    let config = KoConfigTypeArgs::new(values);
     let file = toml::to_string_pretty(&config)
         .map_err(|err| ConfigError::SavingConfigTypeArgs(err.to_string()))?;
     std::fs::write(path, file).map_err(|err| ConfigError::SavingConfigTypeArgs(err.to_string()))?;

@@ -16,6 +16,9 @@ ckb_indexer_url = "http://127.0.0.1:8116/"
 # endpoint for running rpc server
 rpc_endpoint = "0.0.0.0:8090"
 
+# interval time for persistence of contexts status
+persist_interval_sec = 60
+
 # necessary cell deps
 project_cell_deps = [
     # omni

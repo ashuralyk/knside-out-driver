@@ -9,12 +9,13 @@ use ko_protocol::ckb_types::packed::Script;
 use ko_protocol::ckb_types::prelude::Unpack;
 use ko_protocol::secp256k1::SecretKey;
 use ko_protocol::tokio::sync::mpsc::{unbounded_channel, UnboundedReceiver, UnboundedSender};
+use ko_protocol::tokio::sync::Mutex;
 use ko_protocol::tokio::task::JoinHandle;
 use ko_protocol::traits::{Assembler, CkbClient, ContextRpc, Driver, Executor};
 use ko_protocol::types::assembler::{KoCellOutput, KoProject, KoRequest};
 use ko_protocol::types::config::KoDriveConfig;
 use ko_protocol::types::context::KoContextRpcEcho;
-use ko_protocol::{log, tokio, KoResult, ProjectDeps, H256};
+use ko_protocol::{async_trait, lazy_static, log, tokio, KoResult, ProjectDeps, H256};
 
 #[cfg(test)]
 mod tests;
@@ -262,12 +263,16 @@ impl<C: CkbClient> ContextImpl<C> {
     }
 }
 
+type Context = (JoinHandle<()>, UnboundedSender<KoContextRpcEcho>);
+lazy_static! {
+    static ref CONTEXT_POOL: Mutex<HashMap<H256, Context>> = Mutex::new(HashMap::new());
+}
+
 pub struct ContextMgr<C: CkbClient> {
     rpc_client: C,
     private_key: SecretKey,
     project_deps: ProjectDeps,
     driver_config: KoDriveConfig,
-    context_pool: HashMap<H256, (JoinHandle<()>, UnboundedSender<KoContextRpcEcho>)>,
 }
 
 impl<C: CkbClient + 'static> ContextMgr<C> {
@@ -282,28 +287,37 @@ impl<C: CkbClient + 'static> ContextMgr<C> {
             private_key: *private_key,
             project_deps: project_deps.clone(),
             driver_config: driver_config.clone(),
-            context_pool: HashMap::new(),
         }
     }
 
-    pub fn recover_contexts(&mut self, project_type_args_list: Vec<(H256, bool)>) {
-        project_type_args_list
-            .into_iter()
-            .for_each(|(hash, running)| {
-                if running {
-                    self.start_project_driver(&hash);
-                } else {
-                    let (sender, _) = unbounded_channel();
-                    self.context_pool
-                        .insert(hash, (tokio::spawn(async {}), sender));
-                }
-            });
+    pub async fn recover_contexts(&mut self, project_type_args_list: Vec<(H256, bool)>) {
+        for (hash, running) in project_type_args_list {
+            if running {
+                self.start_project_driver(&hash).await;
+            } else {
+                let (sender, _) = unbounded_channel();
+                CONTEXT_POOL
+                    .lock()
+                    .await
+                    .insert(hash, (tokio::spawn(async {}), sender));
+            }
+        }
+    }
+
+    pub async fn dump_contexts_status() -> Vec<(H256, bool)> {
+        CONTEXT_POOL
+            .lock()
+            .await
+            .iter()
+            .map(|(hash, context)| (hash.clone(), !context.0.is_finished()))
+            .collect()
     }
 }
 
+#[async_trait]
 impl<C: CkbClient + 'static> ContextRpc for ContextMgr<C> {
-    fn start_project_driver(&mut self, project_type_args: &H256) -> bool {
-        if let Some((ctx, _)) = self.context_pool.get(project_type_args) {
+    async fn start_project_driver(&mut self, project_type_args: &H256) -> bool {
+        if let Some((ctx, _)) = CONTEXT_POOL.lock().await.get(project_type_args) {
             if !ctx.is_finished() {
                 return false;
             }
@@ -315,12 +329,14 @@ impl<C: CkbClient + 'static> ContextRpc for ContextMgr<C> {
             &self.project_deps,
             &self.driver_config,
         );
-        self.context_pool
+        CONTEXT_POOL
+            .lock()
+            .await
             .insert(project_type_args.clone(), (tokio::spawn(ctx.run()), rpc));
         true
     }
 
-    fn estimate_payment_ckb(
+    async fn estimate_payment_ckb(
         &self,
         project_type_args: &H256,
         sender: &Script,
@@ -329,7 +345,7 @@ impl<C: CkbClient + 'static> ContextRpc for ContextMgr<C> {
         recipient: &Option<Script>,
         response: UnboundedSender<KoResult<u64>>,
     ) -> bool {
-        if let Some((ctx, rpc_sender)) = self.context_pool.get(project_type_args) {
+        if let Some((ctx, rpc_sender)) = CONTEXT_POOL.lock().await.get(project_type_args) {
             if !ctx.is_finished() {
                 let params = KoContextRpcEcho::EstimatePaymentCkb((
                     (
@@ -347,13 +363,13 @@ impl<C: CkbClient + 'static> ContextRpc for ContextMgr<C> {
         false
     }
 
-    fn listen_request_committed(
+    async fn listen_request_committed(
         &self,
         project_type_args: &H256,
         request_hash: &H256,
         response: UnboundedSender<KoResult<H256>>,
     ) -> bool {
-        if let Some((ctx, rpc_sender)) = self.context_pool.get(project_type_args) {
+        if let Some((ctx, rpc_sender)) = CONTEXT_POOL.lock().await.get(project_type_args) {
             if ctx.is_finished() {
                 let params =
                     KoContextRpcEcho::ListenRequestCommitted((request_hash.clone(), response));
