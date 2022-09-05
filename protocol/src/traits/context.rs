@@ -1,7 +1,7 @@
-use ckb_types::{packed::Script, H256};
+use ckb_types::packed::Script;
 use tokio::sync::mpsc::UnboundedSender;
 
-use crate::KoResult;
+use crate::{KoResult, H256};
 
 pub trait ContextRpc: Send + Sync {
     fn start_project_driver(&mut self, project_type_args: &H256) -> bool;

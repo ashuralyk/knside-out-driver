@@ -3,9 +3,9 @@ use ko_protocol::ckb_sdk::rpc::ckb_indexer::{ScriptType, SearchKey};
 use ko_protocol::ckb_sdk::traits::LiveCell;
 use ko_protocol::ckb_types::packed::{CellOutput, Script};
 use ko_protocol::ckb_types::prelude::{Builder, Entity, Pack};
-use ko_protocol::ckb_types::{bytes::Bytes, core::ScriptHashType, H256};
+use ko_protocol::ckb_types::{bytes::Bytes, core::ScriptHashType};
 use ko_protocol::traits::CkbClient;
-use ko_protocol::{is_mol_flag_2, mol_deployment_raw, mol_flag_0, mol_flag_1, KoResult};
+use ko_protocol::{is_mol_flag_2, mol_deployment_raw, mol_flag_0, mol_flag_1, KoResult, H256};
 
 use crate::error::AssemblerError;
 
@@ -16,7 +16,7 @@ pub async fn search_project_cell(
     let project_typescript = Script::new_builder()
         .code_hash(TYPE_ID_CODE_HASH.pack())
         .hash_type(ScriptHashType::Type.into())
-        .args(project_id_args.0.as_slice().pack())
+        .args(project_id_args.as_bytes().pack())
         .build();
     let search_key = SearchKey {
         script: project_typescript.into(),
@@ -42,7 +42,7 @@ pub async fn search_global_cell(
     let global_typescript = Script::new_builder()
         .code_hash(code_hash.pack())
         .hash_type(ScriptHashType::Data.into())
-        .args(mol_flag_0(&project_id.0).as_slice().pack())
+        .args(mol_flag_0(project_id.as_bytes32()).as_slice().pack())
         .build();
     let search_key = SearchKey {
         script: global_typescript.into(),
@@ -64,7 +64,7 @@ pub fn make_global_script(code_hash: &H256, project_id: &H256) -> Script {
     Script::new_builder()
         .code_hash(code_hash.pack())
         .hash_type(ScriptHashType::Data.into())
-        .args(mol_flag_0(&project_id.0).as_slice().pack())
+        .args(mol_flag_0(project_id.as_bytes32()).as_slice().pack())
         .build()
 }
 
@@ -72,7 +72,7 @@ pub fn make_personal_script(code_hash: &H256, project_id: &H256) -> Script {
     Script::new_builder()
         .code_hash(code_hash.pack())
         .hash_type(ScriptHashType::Data.into())
-        .args(mol_flag_1(&project_id.0).as_slice().pack())
+        .args(mol_flag_1(project_id.as_bytes32()).as_slice().pack())
         .build()
 }
 

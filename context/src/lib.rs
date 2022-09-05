@@ -4,9 +4,9 @@ use std::time::Duration;
 use ko_context_assembler::AssemblerImpl;
 use ko_context_driver::DriverImpl;
 use ko_context_executor::ExecutorImpl;
+use ko_protocol::ckb_types::bytes::Bytes;
 use ko_protocol::ckb_types::packed::Script;
 use ko_protocol::ckb_types::prelude::Unpack;
-use ko_protocol::ckb_types::{bytes::Bytes, H256};
 use ko_protocol::secp256k1::SecretKey;
 use ko_protocol::tokio::sync::mpsc::{unbounded_channel, UnboundedReceiver, UnboundedSender};
 use ko_protocol::tokio::task::JoinHandle;
@@ -14,7 +14,7 @@ use ko_protocol::traits::{Assembler, CkbClient, ContextRpc, Driver, Executor};
 use ko_protocol::types::assembler::{KoCellOutput, KoProject, KoRequest};
 use ko_protocol::types::config::KoDriveConfig;
 use ko_protocol::types::context::KoContextRpcEcho;
-use ko_protocol::{tokio, KoResult, ProjectDeps};
+use ko_protocol::{log, tokio, KoResult, ProjectDeps, H256};
 
 #[cfg(test)]
 mod tests;
@@ -71,14 +71,21 @@ impl<C: CkbClient> ContextImpl<C> {
         self.project_context.owner_lockhash = project_owner;
         self.project_context.global_json_data = global_data;
 
-        println!("[INFO] knside-out drive server started, enter drive loop");
+        log::info!(
+            "[{}] knside-out drive server started new drive loop",
+            self.assembler.get_project_args()
+        );
         let drive_interval = Duration::from_secs(self.config.drive_interval_sec as u64);
         let max_idle_duration = Duration::from_secs(self.config.kickout_duration_sec);
         loop {
             tokio::select! {
                 _ = tokio::time::sleep(self.drive_interval) => {
                     if let Some(hash) = self.drive(&project_dep).await? {
-                        println!("[INFO] transaction #{} confirmed", hash);
+                        log::info!(
+                            "[{}] transaction #{} confirmed",
+                            self.assembler.get_project_args(),
+                            hash
+                        );
                         self.idle_duration = Duration::ZERO;
                         self.drive_interval = Duration::ZERO;
                     } else {
@@ -248,7 +255,7 @@ impl<C: CkbClient> ContextImpl<C> {
     pub async fn run(mut self) {
         loop {
             if let Err(error) = self.start_drive_loop().await {
-                println!("[ERROR] {}", error);
+                log::error!("[{}] {}", self.assembler.get_project_args(), error);
             }
             tokio::time::sleep(self.drive_interval).await;
         }

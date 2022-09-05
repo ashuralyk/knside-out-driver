@@ -1,7 +1,7 @@
-use ko_protocol::ckb_types::{packed::Script, H256};
+use ko_protocol::ckb_types::packed::Script;
 use ko_protocol::tokio::sync::mpsc::UnboundedSender;
 use ko_protocol::traits::ContextRpc;
-use ko_protocol::KoResult;
+use ko_protocol::{KoResult, H256};
 
 #[derive(Default, Clone, Copy)]
 pub struct MockContextrpc {}

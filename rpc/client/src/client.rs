@@ -14,10 +14,9 @@ use ko_protocol::ckb_jsonrpc_types::{
     Transaction, TransactionWithStatus, Uint32,
 };
 use ko_protocol::ckb_sdk::rpc::ckb_indexer::{Cell, Order, Pagination, SearchKey};
-use ko_protocol::ckb_types::H256;
 use ko_protocol::traits::{CkbClient, RPC};
 use ko_protocol::types::error::{ErrorType, KoError};
-use ko_protocol::{async_trait, serde_json, tokio, KoResult};
+use ko_protocol::{async_trait, serde_json, tokio, KoResult, H256};
 
 #[allow(clippy::upper_case_acronyms)]
 enum Target {

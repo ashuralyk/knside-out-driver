@@ -37,7 +37,7 @@ async fn deploy_project_deployment_cell() {
     let (context, _) = ContextImpl::new(
         &rpc_client,
         &privkey,
-        &PROJECT_TYPE_ARGS,
+        &PROJECT_TYPE_ARGS.into(),
         &PROJECT_VARS,
         &DRIVE_CONFIG,
     );
@@ -74,7 +74,7 @@ async fn update_project_deployment_cell() {
     let (context, _) = ContextImpl::new(
         &rpc_client,
         &privkey,
-        &PROJECT_TYPE_ARGS,
+        &PROJECT_TYPE_ARGS.into(),
         &PROJECT_VARS,
         &DRIVE_CONFIG,
     );
@@ -83,7 +83,7 @@ async fn update_project_deployment_cell() {
         .create_project_upgrade_digest(
             Bytes::from(hex::encode(lua_code).as_bytes().to_vec()),
             OWNER_ADDRESS.into(),
-            &PROJECT_TYPE_ARGS,
+            &PROJECT_TYPE_ARGS.into(),
             &PROJECT_VARS,
         )
         .await
@@ -107,7 +107,7 @@ async fn request_project_request_cell() {
     let (context, _) = ContextImpl::new(
         &rpc_client,
         &privkey,
-        &PROJECT_TYPE_ARGS,
+        &PROJECT_TYPE_ARGS.into(),
         &PROJECT_VARS,
         &DRIVE_CONFIG,
     );
@@ -117,7 +117,11 @@ async fn request_project_request_cell() {
     if function_call == "claim_nfts" {
         // search previous personal cell
         let personal_data = backend
-            .search_personal_data(OWNER_ADDRESS.into(), &PROJECT_TYPE_ARGS, &PROJECT_VARS)
+            .search_personal_data(
+                OWNER_ADDRESS.into(),
+                &PROJECT_TYPE_ARGS.into(),
+                &PROJECT_VARS,
+            )
             .await
             .expect("search personal");
         previous_cell = {
@@ -137,7 +141,7 @@ async fn request_project_request_cell() {
             None,
             previous_cell,
             function_call,
-            &PROJECT_TYPE_ARGS,
+            &PROJECT_TYPE_ARGS.into(),
             &PROJECT_VARS,
         )
         .await
@@ -165,7 +169,7 @@ async fn request_project_request_cell() {
 async fn fetch_global_json_data() {
     let rpc_client = RpcClient::new(CKB_URL, CKB_INDEXER_URL);
     let global_data = BackendImpl::new(&rpc_client, MockContextrpc::default())
-        .search_global_data(&PROJECT_TYPE_ARGS, &PROJECT_VARS)
+        .search_global_data(&PROJECT_TYPE_ARGS.into(), &PROJECT_VARS)
         .await
         .expect("search global");
     println!("global_data = {}", global_data);
@@ -175,7 +179,11 @@ async fn fetch_global_json_data() {
 async fn fetch_personal_json_data() {
     let rpc_client = RpcClient::new(CKB_URL, CKB_INDEXER_URL);
     let personal_data = BackendImpl::new(&rpc_client, MockContextrpc::default())
-        .search_personal_data(OWNER_ADDRESS.into(), &PROJECT_TYPE_ARGS, &PROJECT_VARS)
+        .search_personal_data(
+            OWNER_ADDRESS.into(),
+            &PROJECT_TYPE_ARGS.into(),
+            &PROJECT_VARS,
+        )
         .await
         .expect("search personal");
     personal_data.into_iter().for_each(|(data, outpoint)| {

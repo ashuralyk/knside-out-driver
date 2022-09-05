@@ -1,6 +1,6 @@
-use ko_protocol::ckb_types::H256;
 use ko_protocol::derive_more::Display;
 use ko_protocol::types::error::{ErrorType, KoError};
+use ko_protocol::H256;
 
 #[derive(Display, Debug)]
 pub enum DriverError {

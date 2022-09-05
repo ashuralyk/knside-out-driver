@@ -4,4 +4,5 @@ pub mod context;
 pub mod error;
 pub mod executor;
 pub mod generated;
+pub mod h256;
 pub mod server;

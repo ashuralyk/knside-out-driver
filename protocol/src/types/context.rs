@@ -1,7 +1,7 @@
-use ckb_types::{packed::Script, H256};
+use ckb_types::packed::Script;
 use tokio::sync::mpsc::UnboundedSender;
 
-use crate::KoResult;
+use crate::{KoResult, H256};
 
 #[derive(Debug)]
 pub enum KoContextRpcEcho {

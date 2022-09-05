@@ -1,9 +1,8 @@
 use std::time::Duration;
 
-use crate::{async_trait, KoResult};
+use crate::{async_trait, KoResult, H256};
 use ckb_types::bytes::Bytes;
 use ckb_types::core::TransactionView;
-use ckb_types::H256;
 
 #[async_trait]
 pub trait Driver {

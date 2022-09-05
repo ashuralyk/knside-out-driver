@@ -1,5 +1,5 @@
-use ko_protocol::ckb_types::H256;
 use ko_protocol::traits::Assembler;
+use ko_protocol::H256;
 use ko_protocol::{hex, secp256k1::SecretKey, tokio, TestVars::*};
 use ko_rpc_client::RpcClient;
 
@@ -13,7 +13,7 @@ async fn drive_one() {
     let (mut ctx, _) = ContextImpl::new(
         &rpc_client,
         &privkey,
-        &PROJECT_TYPE_ARGS,
+        &PROJECT_TYPE_ARGS.into(),
         &PROJECT_VARS,
         &DRIVE_CONFIG,
     );

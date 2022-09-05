@@ -4,12 +4,13 @@ use std::panic::PanicInfo;
 use clap::{crate_version, Arg, Command};
 use ko_backend::BackendImpl;
 use ko_context::ContextMgr;
-use ko_protocol::{secp256k1::SecretKey, tokio, KoResult, ProjectDeps};
+use ko_protocol::{log, secp256k1::SecretKey, tokio, KoResult, Logger, ProjectDeps};
 use ko_rpc::RpcServerRuntime;
 use ko_rpc_client::RpcClient;
 
 #[tokio::main]
 async fn main() -> KoResult<()> {
+    // initail Command line options
     let matches = Command::new("knside-out")
         .version(crate_version!())
         .arg(
@@ -22,6 +23,11 @@ async fn main() -> KoResult<()> {
         )
         .subcommand(Command::new("run").about("Run knside-out process"))
         .get_matches();
+
+    // initail log system
+    log::set_boxed_logger(Box::new(Logger))
+        .map(|_| log::set_max_level(log::LevelFilter::Info))
+        .expect("logger");
 
     let config_path = matches.value_of("config_path").unwrap();
     let config = ko_config::load_file(config_path)?;
@@ -75,10 +81,10 @@ async fn main() -> KoResult<()> {
 
     tokio::select! {
         _ = ctrl_c_handler => {
-            println!(" [INFO] ctrl-c is pressed, quit knside-out")
+            log::warn!("ctrl-c is pressed, quit knside-out")
         }
         Some(panic_info) = panic_receiver.recv() => {
-            println!(" [INFO] child thread paniced: {}", panic_info)
+            log::warn!("child thread paniced: {}", panic_info)
         }
     }
 

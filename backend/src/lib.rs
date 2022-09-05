@@ -4,15 +4,16 @@ use std::str::FromStr;
 use ko_protocol::ckb_jsonrpc_types::{OutputsValidator, TransactionView as JsonTxView};
 use ko_protocol::ckb_sdk::rpc::ckb_indexer::{ScriptType, SearchKey, SearchKeyFilter};
 use ko_protocol::ckb_sdk::Address;
+use ko_protocol::ckb_types::bytes::Bytes;
 use ko_protocol::ckb_types::core::{Capacity, TransactionBuilder, TransactionView};
 use ko_protocol::ckb_types::packed::{CellInput, CellOutput, OutPoint, Script, Transaction};
 use ko_protocol::ckb_types::prelude::{Builder, Entity, Pack, Unpack};
-use ko_protocol::ckb_types::{bytes::Bytes, H256};
 use ko_protocol::serde_json::to_string;
 use ko_protocol::tokio::sync::mpsc::unbounded_channel;
 use ko_protocol::traits::{Backend, CkbClient, ContextRpc};
 use ko_protocol::{
-    async_trait, mol_deployment, mol_flag_0, mol_flag_1, mol_flag_2, KoResult, ProjectDeps,
+    async_trait, log, mol_deployment, mol_flag_0, mol_flag_1, mol_flag_2, KoResult, ProjectDeps,
+    H256,
 };
 
 #[cfg(test)]
@@ -53,12 +54,12 @@ impl<C: CkbClient, R: ContextRpc> Backend for BackendImpl<C, R> {
     ) -> KoResult<(H256, H256)> {
         // make global of output-data
         let (global_data_json, contract_bytecode) = helper::get_global_json_data(&contract)?;
-        println!("global_data_json = {}", global_data_json);
+        log::debug!("global_data_json = {}", global_data_json);
 
         // build mock knside-out transaction outputs and data
         let ckb_address =
             Address::from_str(&address).map_err(|_| BackendError::InvalidAddressFormat(address))?;
-        println!("address = {}", ckb_address);
+        log::debug!("address = {}", ckb_address);
         let secp256k1_script: Script = ckb_address.payload().into();
         let global_secp256k1_script = if management {
             project_deps.project_manager.payload().into()
@@ -104,9 +105,10 @@ impl<C: CkbClient, R: ContextRpc> Backend for BackendImpl<C, R> {
         };
         let (inputs, inputs_capacity) =
             helper::fetch_live_cells(&self.rpc_client, search, 0, outputs_capacity).await?;
-        println!(
+        log::debug!(
             "inputs_capacity = {}, outputs_capacity = {}",
-            inputs_capacity, outputs_capacity
+            inputs_capacity,
+            outputs_capacity
         );
         if inputs_capacity < outputs_capacity {
             return Err(BackendError::InternalTransactionAssembleError.into());
@@ -118,9 +120,12 @@ impl<C: CkbClient, R: ContextRpc> Backend for BackendImpl<C, R> {
             .unwrap();
         let project_type_args = {
             let args: Bytes = project_type_script.args().unpack();
-            H256::from_slice(&args).unwrap()
+            args.try_into().unwrap()
         };
-        let project_type_id = project_type_script.calc_script_hash();
+        let project_type_id: H256 = {
+            let hash = project_type_script.calc_script_hash();
+            hash.unpack()
+        };
         outputs[0] = outputs[0]
             .clone()
             .as_builder()
@@ -128,7 +133,7 @@ impl<C: CkbClient, R: ContextRpc> Backend for BackendImpl<C, R> {
             .build();
         let global_type_script = helper::build_knsideout_script(
             &project_deps.project_code_hash,
-            mol_flag_0(&project_type_id.unpack().0).as_slice(),
+            mol_flag_0(project_type_id.as_bytes32()).as_slice(),
         );
         outputs[1] = outputs[1]
             .clone()
@@ -215,9 +220,10 @@ impl<C: CkbClient, R: ContextRpc> Backend for BackendImpl<C, R> {
         let (mut inputs, inputs_capacity) =
             helper::fetch_live_cells(&self.rpc_client, search, inputs_capacity, outputs_capacity)
                 .await?;
-        println!(
+        log::debug!(
             "inputs_&capacity = {}, outputs_capacity = {}",
-            inputs_capacity, outputs_capacity
+            inputs_capacity,
+            outputs_capacity
         );
         if inputs_capacity < outputs_capacity {
             return Err(BackendError::InternalTransactionAssembleError.into());
@@ -260,7 +266,7 @@ impl<C: CkbClient, R: ContextRpc> Backend for BackendImpl<C, R> {
         project_deps: &ProjectDeps,
     ) -> KoResult<(H256, u64)> {
         // build neccessary scripts
-        let project_type_id = helper::recover_type_id_script(project_type_args.as_bytes())
+        let project_type_id: H256 = helper::recover_type_id_script(project_type_args.as_bytes())
             .calc_script_hash()
             .unpack();
         let secp256k1_script: Script = Address::from_str(&address)
@@ -278,7 +284,7 @@ impl<C: CkbClient, R: ContextRpc> Backend for BackendImpl<C, R> {
                 None
             }
         };
-        let personal_args = mol_flag_1(&project_type_id.0);
+        let personal_args = mol_flag_1(project_type_id.as_bytes32());
         let personal_script =
             helper::build_knsideout_script(&project_deps.project_code_hash, &personal_args);
 
@@ -513,10 +519,10 @@ impl<C: CkbClient, R: ContextRpc> Backend for BackendImpl<C, R> {
         project_deps: &ProjectDeps,
     ) -> KoResult<String> {
         // build global type_script search key
-        let project_type_id = helper::recover_type_id_script(project_type_args.as_bytes())
+        let project_type_id: H256 = helper::recover_type_id_script(project_type_args.as_bytes())
             .calc_script_hash()
             .unpack();
-        let global_args = mol_flag_0(&project_type_id.0);
+        let global_args = mol_flag_0(project_type_id.as_bytes32());
         let global_type_script =
             helper::build_knsideout_script(&project_deps.project_code_hash, &global_args);
         let search = SearchKey {
@@ -551,10 +557,10 @@ impl<C: CkbClient, R: ContextRpc> Backend for BackendImpl<C, R> {
         project_deps: &ProjectDeps,
     ) -> KoResult<Vec<(String, OutPoint)>> {
         // build personal type_script search key
-        let project_type_id = helper::recover_type_id_script(project_type_args.as_bytes())
+        let project_type_id: H256 = helper::recover_type_id_script(project_type_args.as_bytes())
             .calc_script_hash()
             .unpack();
-        let personal_args = mol_flag_1(&project_type_id.0);
+        let personal_args = mol_flag_1(project_type_id.as_bytes32());
         let personal_type_script =
             helper::build_knsideout_script(&project_deps.project_code_hash, &personal_args);
         let secp256k1_script: Script = Address::from_str(&address)

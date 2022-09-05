@@ -11,6 +11,7 @@ pub use ckb_types;
 pub use derive_more;
 pub use hex;
 pub use lazy_static::lazy_static;
+pub use log;
 pub use secp256k1;
 pub use serde;
 pub use serde_json;
@@ -18,9 +19,11 @@ pub use tokio;
 
 pub use types::error::KoResult;
 pub use types::generated::*;
+pub use types::h256::H256;
 
 use ckb_sdk::Address;
-use ckb_types::{packed::CellDep, H256};
+use ckb_types::packed::CellDep;
+use log::{Level, Log, Metadata, Record};
 use types::config::KoCellDep;
 
 #[derive(Clone)]
@@ -60,6 +63,22 @@ impl TryFrom<&types::config::KoConfig> for ProjectDeps {
     }
 }
 
+pub struct Logger;
+
+impl Log for Logger {
+    fn enabled(&self, metadata: &Metadata) -> bool {
+        metadata.level() <= Level::Debug
+    }
+
+    fn log(&self, record: &Record) {
+        if self.enabled(record.metadata()) {
+            println!("{} - {}", record.level(), record.args());
+        }
+    }
+
+    fn flush(&self) {}
+}
+
 #[allow(non_snake_case)]
 pub mod TestVars {
     use crate::ckb_sdk::Address;
@@ -96,11 +115,11 @@ pub mod TestVars {
 
     lazy_static! {
         pub static ref PROJECT_VARS: ProjectDeps = ProjectDeps::new(
-            &PROJECT_CODE_HASH,
+            &PROJECT_CODE_HASH.into(),
             &Address::from_str(OWNER_ADDRESS).unwrap(),
             &[
-                KoCellDep::new(SECP256K1_TX_HASH.clone(), 0, DepType::DepGroup.into()),
-                KoCellDep::new(KNSIDEOUT_TX_HASH.clone(), 0, DepType::Code.into()),
+                KoCellDep::new(SECP256K1_TX_HASH.into(), 0, DepType::DepGroup.into()),
+                KoCellDep::new(KNSIDEOUT_TX_HASH.into(), 0, DepType::Code.into()),
             ]
         );
         pub static ref DRIVE_CONFIG: KoDriveConfig = KoDriveConfig::new(3, 10, 3, 100);

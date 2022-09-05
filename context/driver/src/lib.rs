@@ -5,11 +5,11 @@ use ko_protocol::ckb_jsonrpc_types::{OutputsValidator, Status, TransactionView a
 use ko_protocol::ckb_sdk::SECP256K1;
 use ko_protocol::ckb_types::packed::WitnessArgs;
 use ko_protocol::ckb_types::prelude::{Builder, Entity, Pack};
-use ko_protocol::ckb_types::{bytes::Bytes, core::TransactionView, H256};
+use ko_protocol::ckb_types::{bytes::Bytes, core::TransactionView};
 use ko_protocol::secp256k1::{Message, SecretKey};
 use ko_protocol::serde_json::to_string;
 use ko_protocol::traits::{CkbClient, Driver};
-use ko_protocol::{async_trait, tokio, KoResult};
+use ko_protocol::{async_trait, log, tokio, KoResult, H256};
 
 mod error;
 use error::DriverError;
@@ -96,11 +96,12 @@ impl<C: CkbClient> Driver for DriverImpl<C> {
             }
             if block_number == 0 {
                 if let Some(block_hash) = tx.tx_status.block_hash {
-                    let block = self.rpc_client.get_block(&block_hash).await.unwrap();
+                    let block = self.rpc_client.get_block(&block_hash.into()).await.unwrap();
                     block_number = block.header.inner.number.into();
-                    println!(
-                        "[INFO] transaction #{} commited in block #{}, wait confirm...",
-                        hash, block_number
+                    log::info!(
+                        "transaction #{} commited in block #{}, wait confirm...",
+                        hash,
+                        block_number
                     );
                 }
             } else {

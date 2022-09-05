@@ -2,13 +2,13 @@ use ckb_hash::{Blake2bBuilder, CKB_HASH_PERSONALIZATION};
 
 use ko_protocol::ckb_sdk::constants::TYPE_ID_CODE_HASH;
 use ko_protocol::ckb_sdk::rpc::ckb_indexer::{ScriptType, SearchKey};
+use ko_protocol::ckb_types::bytes::Bytes;
 use ko_protocol::ckb_types::core::{Capacity, DepType, ScriptHashType, TransactionView};
 use ko_protocol::ckb_types::packed::{CellDep, CellInput, CellOutput, Script, WitnessArgs};
 use ko_protocol::ckb_types::prelude::{Builder, Entity, Pack, Unpack};
-use ko_protocol::ckb_types::{bytes::Bytes, H256};
 use ko_protocol::traits::{Assembler, CkbClient};
 use ko_protocol::types::assembler::{KoAssembleReceipt, KoCellOutput, KoProject, KoRequest};
-use ko_protocol::{async_trait, KoResult, ProjectDeps};
+use ko_protocol::{async_trait, KoResult, ProjectDeps, H256};
 
 mod error;
 mod helper;
@@ -45,8 +45,12 @@ impl<C: CkbClient> AssemblerImpl<C> {
         }
     }
 
-    pub fn get_project_id(&self) -> H256 {
-        self.project_id.clone()
+    pub fn get_project_id(&self) -> &H256 {
+        &self.project_id
+    }
+
+    pub fn get_project_args(&self) -> &H256 {
+        &self.project_id_args
     }
 
     pub async fn get_project_owner_and_global(&self) -> KoResult<(H256, Bytes)> {

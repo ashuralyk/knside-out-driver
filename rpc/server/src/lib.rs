@@ -5,11 +5,11 @@ use jsonrpsee::http_server::{HttpServerBuilder, HttpServerHandle};
 use jsonrpsee::{core::Error, proc_macros::rpc, types::error::CallError};
 use ko_protocol::ckb_jsonrpc_types::OutPoint;
 use ko_protocol::ckb_sdk::HumanCapacity;
-use ko_protocol::ckb_types::{bytes::Bytes, H256};
+use ko_protocol::ckb_types::bytes::Bytes;
 use ko_protocol::tokio::sync::Mutex;
 use ko_protocol::traits::Backend;
 use ko_protocol::ProjectDeps;
-use ko_protocol::{async_trait, hex, types::server::*, KoResult};
+use ko_protocol::{async_trait, hex, log, types::server::*, KoResult, H256};
 
 mod error;
 use error::RpcServerError;
@@ -79,7 +79,7 @@ pub struct RpcServer<B: Backend + 'static> {
 #[async_trait]
 impl<B: Backend + 'static> KnsideRpcServer for RpcServer<B> {
     async fn version(&self) -> RpcResult<String> {
-        println!(" [RPC] receive `version` rpc call");
+        log::debug!("[RPC] receive `version` rpc call");
         Ok("1.0.0".into())
     }
 
@@ -89,9 +89,10 @@ impl<B: Backend + 'static> KnsideRpcServer for RpcServer<B> {
         contract_code: String,
         use_management: bool,
     ) -> RpcResult<KoMakeDeployTransactionDigestResponse> {
-        println!(
-            " [RPC] receive `make_deploy_transaction_digest` rpc call <= {}({})",
-            sender, use_management
+        log::debug!(
+            "[RPC] receive `make_deploy_transaction_digest` rpc call <= {}({})",
+            sender,
+            use_management
         );
         let contract = hex::decode(contract_code).map_err(|err| Error::Custom(err.to_string()))?;
         let mut backend = self.ctx.backend.lock().await;
@@ -117,9 +118,10 @@ impl<B: Backend + 'static> KnsideRpcServer for RpcServer<B> {
         new_contract_code: String,
         project_type_args: H256,
     ) -> RpcResult<H256> {
-        println!(
-            " [RPC] receive `make_upgrade_transaction_digest` rpc call <= {}({})",
-            sender, project_type_args
+        log::debug!(
+            "[RPC] receive `make_upgrade_transaction_digest` rpc call <= {}({})",
+            sender,
+            project_type_args
         );
         let contract =
             hex::decode(new_contract_code).map_err(|err| Error::Custom(err.to_string()))?;
@@ -144,9 +146,10 @@ impl<B: Backend + 'static> KnsideRpcServer for RpcServer<B> {
         previous_cell: Option<OutPoint>,
         project_type_args: H256,
     ) -> RpcResult<KoMakeRequestTransactionDigestResponse> {
-        println!(
-            " [RPC] receive `make_request_transaction_digest` rpc call <= {}({})",
-            sender, contract_call
+        log::debug!(
+            "[RPC] receive `make_request_transaction_digest` rpc call <= {}({})",
+            sender,
+            contract_call
         );
         let mut backend = self.ctx.backend.lock().await;
         let (digest, payment_ckb) = backend
@@ -168,8 +171,8 @@ impl<B: Backend + 'static> KnsideRpcServer for RpcServer<B> {
     }
 
     async fn send_transaction_signature(&self, digest: H256, signature: String) -> RpcResult<H256> {
-        println!(
-            " [RPC] receive `send_transaction_signature` rpc call <= digest({})",
+        log::debug!(
+            "[RPC] receive `send_transaction_signature` rpc call <= digest({})",
             digest
         );
         let signature = hex::decode(signature).map_err(|_| {
@@ -200,8 +203,8 @@ impl<B: Backend + 'static> KnsideRpcServer for RpcServer<B> {
         request_hash: H256,
         project_type_args: H256,
     ) -> RpcResult<Option<H256>> {
-        println!(
-            " [RPC] receive `wait_request_transaction_committed` rpc call <= hash({})",
+        log::debug!(
+            "[RPC] receive `wait_request_transaction_committed` rpc call <= hash({})",
             hex::encode(&request_hash)
         );
         self.ctx
@@ -218,8 +221,8 @@ impl<B: Backend + 'static> KnsideRpcServer for RpcServer<B> {
     }
 
     async fn manage_global_driver(&self, project_type_args: H256) -> RpcResult<()> {
-        println!(
-            " [RPC] receive `manage_global_drive` rpc call => {}",
+        log::debug!(
+            "[RPC] receive `manage_global_drive` rpc call => {}",
             hex::encode(&project_type_args)
         );
         self.ctx
@@ -241,8 +244,8 @@ impl<B: Backend + 'static> KnsideRpcServer for RpcServer<B> {
             .search_global_data(&project_type_args, &self.ctx.project_deps)
             .await
             .map_err(|err| Error::Custom(err.to_string()));
-        println!(
-            " [RPC] receive `fetch_global_data` rpc call => {:?}",
+        log::debug!(
+            "[RPC] receive `fetch_global_data` rpc call => {:?}",
             global_data
         );
         global_data
@@ -253,7 +256,7 @@ impl<B: Backend + 'static> KnsideRpcServer for RpcServer<B> {
         address: String,
         project_type_args: H256,
     ) -> RpcResult<KoFetchPersonalDataResponse> {
-        println!(" [RPC] receive `fetch_global_data` rpc call <= {}", address);
+        log::debug!("[RPC] receive `fetch_global_data` rpc call <= {}", address);
         let personal_data = self
             .ctx
             .backend

@@ -1,5 +1,5 @@
-use crate::{async_trait, KoResult, ProjectDeps};
-use ckb_types::{bytes::Bytes, packed::OutPoint, H256};
+use crate::{async_trait, KoResult, ProjectDeps, H256};
+use ckb_types::{bytes::Bytes, packed::OutPoint};
 
 #[async_trait]
 pub trait Backend: Send + Sync {

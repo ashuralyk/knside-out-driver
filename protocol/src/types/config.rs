@@ -1,8 +1,9 @@
 use ckb_types::packed::{CellDep, OutPoint};
 use ckb_types::prelude::{Builder, Entity, Pack};
-use ckb_types::H256;
 use derive_more::Constructor;
 use serde::{Deserialize, Serialize};
+
+use crate::H256;
 
 #[derive(Deserialize, Clone, Constructor)]
 pub struct KoCellDep {

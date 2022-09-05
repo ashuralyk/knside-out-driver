@@ -5,9 +5,8 @@ use ckb_jsonrpc_types::{
     Transaction, TransactionWithStatus,
 };
 use ckb_sdk::rpc::ckb_indexer::{Cell, Pagination, SearchKey};
-use ckb_types::H256;
 
-use crate::{async_trait, KoResult};
+use crate::{async_trait, KoResult, H256};
 
 #[async_trait]
 pub trait CkbClient: Send + Sync + Clone {

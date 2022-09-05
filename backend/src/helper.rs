@@ -3,12 +3,12 @@ use std::str::FromStr;
 use ko_protocol::ckb_sdk::constants::TYPE_ID_CODE_HASH;
 use ko_protocol::ckb_sdk::rpc::ckb_indexer::SearchKey;
 use ko_protocol::ckb_sdk::HumanCapacity;
+use ko_protocol::ckb_types::bytes::Bytes;
 use ko_protocol::ckb_types::core::{ScriptHashType, TransactionView};
 use ko_protocol::ckb_types::packed::{CellInput, CellOutput, Script, ScriptOpt, WitnessArgs};
 use ko_protocol::ckb_types::prelude::{Builder, Entity, Pack, Unpack};
-use ko_protocol::ckb_types::{bytes::Bytes, H256};
 use ko_protocol::serde_json;
-use ko_protocol::{mol_flag_0, traits::CkbClient, KoResult};
+use ko_protocol::{mol_flag_0, traits::CkbClient, KoResult, H256};
 
 use crate::BackendError;
 
@@ -21,7 +21,7 @@ pub fn build_knsideout_script(code_hash: &H256, args: &[u8]) -> Script {
 }
 
 pub fn build_global_type_script(project_code_hash: &H256, project_type_args: &H256) -> Script {
-    let project_id = Script::new_builder()
+    let project_id: H256 = Script::new_builder()
         .code_hash(TYPE_ID_CODE_HASH.pack())
         .hash_type(ScriptHashType::Type.into())
         .args(project_type_args.as_bytes().pack())
@@ -31,7 +31,7 @@ pub fn build_global_type_script(project_code_hash: &H256, project_type_args: &H2
     Script::new_builder()
         .code_hash(project_code_hash.pack())
         .hash_type(ScriptHashType::Data.into())
-        .args(mol_flag_0(&project_id.0).as_slice().pack())
+        .args(mol_flag_0(project_id.as_bytes32()).as_slice().pack())
         .build()
 }
 

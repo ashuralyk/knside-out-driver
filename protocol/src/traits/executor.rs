@@ -1,8 +1,8 @@
-use crate::ckb_types::bytes::Bytes;
-use crate::ckb_types::H256;
+use ckb_types::bytes::Bytes;
+
 use crate::types::assembler::KoRequest;
 use crate::types::executor::KoExecuteReceipt;
-use crate::KoResult;
+use crate::{KoResult, H256};
 
 pub trait Executor {
     fn execute_lua_requests(
