@@ -10,8 +10,20 @@ pub enum BackendError {
     #[display(fmt = "Throw error while calling `construct()`, error = {}", _0)]
     MissConstructFunction(String),
 
+    #[display(fmt = "Cannot create KOC global table, error = {}", _0)]
+    CreateKOCTableError(String),
+
+    #[display(fmt = "Cannot inject KOC global context, error = {}", _0)]
+    InjectKOCContextError(String),
+
     #[display(fmt = "Throw error while jsonify global table, error = {}", _0)]
     GlobalTableNotJsonify(String),
+
+    #[display(fmt = "Bad contract constructor return type, error = {}", _0)]
+    InvalidConstructReturnType(String),
+
+    #[display(fmt = "Bad driver filled in contract constructor")]
+    InvalidSpecificContractDriver,
 
     #[display(fmt = "Address format not supported, address = {}", _0)]
     InvalidAddressFormat(String),

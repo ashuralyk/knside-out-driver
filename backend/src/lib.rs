@@ -12,8 +12,8 @@ use ko_protocol::serde_json::to_string;
 use ko_protocol::tokio::sync::mpsc::unbounded_channel;
 use ko_protocol::traits::{Backend, CkbClient, ContextRpc};
 use ko_protocol::{
-    async_trait, log, mol_deployment, mol_flag_0, mol_flag_1, mol_flag_2, KoResult, ProjectDeps,
-    H256,
+    async_trait, hex, log, mol_deployment, mol_flag_0, mol_flag_1, mol_flag_2, KoResult,
+    ProjectDeps, H256,
 };
 
 #[cfg(test)]
@@ -49,22 +49,27 @@ impl<C: CkbClient, R: ContextRpc> Backend for BackendImpl<C, R> {
         &mut self,
         contract: Bytes,
         address: String,
-        management: bool,
         project_deps: &ProjectDeps,
     ) -> KoResult<(H256, H256)> {
-        // make global of output-data
-        let (global_data_json, contract_bytecode) = helper::get_global_json_data(&contract)?;
-        log::debug!("global_data_json = {}", global_data_json);
-
-        // build mock knside-out transaction outputs and data
+        // prepare scripts
         let ckb_address =
             Address::from_str(&address).map_err(|_| BackendError::InvalidAddressFormat(address))?;
         log::debug!("address = {}", ckb_address);
         let secp256k1_script: Script = ckb_address.payload().into();
-        let global_secp256k1_script = if management {
-            project_deps.project_manager.payload().into()
-        } else {
+        let manager_secp256k1_script: Script = project_deps.project_manager.payload().into();
+
+        // make global of output-data
+        let owner = hex::encode(&secp256k1_script.calc_script_hash().raw_data());
+        let manager = hex::encode(&manager_secp256k1_script.calc_script_hash().raw_data());
+        let (global_data_json, owner_as_driver, contract_bytecode) =
+            helper::get_global_json_data(&contract, &owner, &manager)?;
+        log::debug!("global_data_json = {}", global_data_json);
+
+        // build mock knside-out transaction outputs and data
+        let driver_secp256k1_script = if owner_as_driver {
             secp256k1_script.clone()
+        } else {
+            manager_secp256k1_script
         };
         let global_type_script = helper::build_knsideout_script(
             &project_deps.project_code_hash,
@@ -80,7 +85,7 @@ impl<C: CkbClient, R: ContextRpc> Backend for BackendImpl<C, R> {
                 .unwrap(),
             // global cell
             CellOutput::new_builder()
-                .lock(global_secp256k1_script)
+                .lock(driver_secp256k1_script)
                 .type_(Some(global_type_script).pack())
                 .build_exact_capacity(Capacity::bytes(global_data_json.len()).unwrap())
                 .unwrap(),

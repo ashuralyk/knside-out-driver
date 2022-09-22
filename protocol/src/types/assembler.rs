@@ -2,36 +2,35 @@ use ckb_types::bytes::Bytes;
 use ckb_types::packed::{CellDep, Script};
 use derive_more::Constructor;
 
+use super::context::KoContextGlobalCell;
+
 #[derive(Constructor)]
 pub struct KoRequest {
     pub json_data: Bytes,
     pub function_call: Bytes,
     pub lock_script: Script,
     pub recipient_script: Option<Script>,
-    pub payment: u64,
-    pub ckb: u64,
+    pub payment_ckb: u64,
+    pub capacity: u64,
 }
 
 #[derive(Constructor)]
 pub struct KoProject {
     pub cell_dep: CellDep,
     pub lua_code: Bytes,
+    pub contract_owner: Script,
 }
 
 pub struct KoAssembleReceipt {
     pub requests: Vec<KoRequest>,
-    pub global_json_data: Bytes,
-    pub global_lockscript: Script,
-    pub global_ckb: u64,
+    pub global_cell: KoContextGlobalCell,
     pub random_seeds: [i64; 2],
 }
 
 impl KoAssembleReceipt {
     pub fn new(
         requests: Vec<KoRequest>,
-        global_json_data: Bytes,
-        global_lockscript: Script,
-        global_ckb: u64,
+        global_cell: KoContextGlobalCell,
         random_bytes: [u8; 16],
     ) -> Self {
         let random_seeds = {
@@ -43,9 +42,7 @@ impl KoAssembleReceipt {
         };
         KoAssembleReceipt {
             requests,
-            global_json_data,
-            global_lockscript,
-            global_ckb,
+            global_cell,
             random_seeds,
         }
     }

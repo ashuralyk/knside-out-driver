@@ -46,7 +46,6 @@ async fn deploy_project_deployment_cell() {
         .create_project_deploy_digest(
             Bytes::from(hex::encode(lua_code).as_bytes().to_vec()),
             OWNER_ADDRESS.into(),
-            false,
             &PROJECT_VARS,
         )
         .await

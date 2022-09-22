@@ -50,6 +50,7 @@ async fn main() -> KoResult<()> {
     );
     context_mgr.recover_contexts(config_type_args.into()).await;
 
+    // backup loop for persisting contexts status into project_type_args toml file
     tokio::spawn(async move {
         loop {
             tokio::select! {

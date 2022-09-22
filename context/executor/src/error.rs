@@ -22,16 +22,14 @@ pub enum ExecutorError {
     #[display(fmt = "Invalid request lua code, code = {}, reason = {}", _0, _1)]
     ErrorLoadRequestLuaCode(String, String),
 
-    #[display(
-        fmt = "The input_ckb({}) is less than the cost_ckb({}) in cell({})",
-        _0,
-        _1,
-        _2
-    )]
-    InsufficientRequiredCkb(u64, u64, usize),
-
-    #[display(fmt = "owner mismatch, {} != {}", _0, _1)]
+    #[display(fmt = "koc.owner mismatch, {} != {}", _0, _1)]
     OwnerLockhashMismatch(String, String),
+
+    #[display(fmt = "koc.user mismatch")]
+    UnexpectedUserLockhash,
+
+    #[display(fmt = "koc.driver mismatch")]
+    UnexpectedDriverLockhash,
 
     #[display(fmt = "Lua code execution error = {}", _0)]
     LuaVmError(String),

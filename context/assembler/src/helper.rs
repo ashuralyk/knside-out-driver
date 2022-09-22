@@ -80,7 +80,7 @@ pub fn check_valid_request(cell: &CellOutput, code_hash: &H256) -> bool {
     let lock = &cell.lock();
     if lock.code_hash().as_slice() != code_hash.as_bytes()
         || lock.hash_type() != ScriptHashType::Data.into()
-        || !is_mol_flag_2(&lock.args().raw_data().to_vec())
+        || !is_mol_flag_2(&lock.args().raw_data())
     {
         return false;
     }

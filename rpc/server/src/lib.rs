@@ -26,7 +26,6 @@ trait KnsideRpc {
         &self,
         sender: String,
         contract_code: String,
-        use_management: bool,
     ) -> RpcResult<KoMakeDeployTransactionDigestResponse>;
 
     #[method(name = "ko_makeUpgradeTransactionDigest")]
@@ -57,8 +56,8 @@ trait KnsideRpc {
         project_type_args: H256,
     ) -> RpcResult<Option<H256>>;
 
-    #[method(name = "ko_mangeGlobalDriver")]
-    async fn manage_global_driver(&self, project_type_args: H256) -> RpcResult<()>;
+    #[method(name = "ko_manageGlobalDataDriver")]
+    async fn manage_global_data_driver(&self, project_type_args: H256) -> RpcResult<()>;
 
     #[method(name = "ko_fetchGlobalData")]
     async fn fetch_global_data(&self, project_type_args: H256) -> RpcResult<String>;
@@ -87,22 +86,15 @@ impl<B: Backend + 'static> KnsideRpcServer for RpcServer<B> {
         &self,
         sender: String,
         contract_code: String,
-        use_management: bool,
     ) -> RpcResult<KoMakeDeployTransactionDigestResponse> {
         log::debug!(
-            "[RPC] receive `make_deploy_transaction_digest` rpc call <= {}({})",
+            "[RPC] receive `make_deploy_transaction_digest` rpc call <= {}",
             sender,
-            use_management
         );
         let contract = hex::decode(contract_code).map_err(|err| Error::Custom(err.to_string()))?;
         let mut backend = self.ctx.backend.lock().await;
         let (digest, project_type_args) = backend
-            .create_project_deploy_digest(
-                Bytes::from(contract),
-                sender,
-                use_management,
-                &self.ctx.project_deps,
-            )
+            .create_project_deploy_digest(Bytes::from(contract), sender, &self.ctx.project_deps)
             .await
             .map_err(|err| Error::Custom(err.to_string()))?;
         let result = KoMakeDeployTransactionDigestResponse::new(
@@ -220,7 +212,7 @@ impl<B: Backend + 'static> KnsideRpcServer for RpcServer<B> {
             .map_err(|err| Error::Custom(err.to_string()))
     }
 
-    async fn manage_global_driver(&self, project_type_args: H256) -> RpcResult<()> {
+    async fn manage_global_data_driver(&self, project_type_args: H256) -> RpcResult<()> {
         log::debug!(
             "[RPC] receive `manage_global_drive` rpc call => {}",
             hex::encode(&project_type_args)

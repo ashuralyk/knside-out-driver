@@ -14,7 +14,7 @@ use ko_protocol::tokio::task::JoinHandle;
 use ko_protocol::traits::{Assembler, CkbClient, ContextRpc, Driver, Executor};
 use ko_protocol::types::assembler::{KoCellOutput, KoProject, KoRequest};
 use ko_protocol::types::config::KoDriveConfig;
-use ko_protocol::types::context::KoContextRpcEcho;
+use ko_protocol::types::context::{KoContextGlobalCell, KoContextRpcEcho};
 use ko_protocol::{async_trait, lazy_static, log, tokio, KoResult, ProjectDeps, H256};
 
 #[cfg(test)]
@@ -23,8 +23,8 @@ mod tests;
 #[derive(Default)]
 struct ProjectContext {
     pub contract_code: Bytes,
-    pub global_json_data: Bytes,
-    pub owner_lockhash: H256,
+    pub project_owner: Script,
+    pub global_cell: KoContextGlobalCell,
 }
 
 pub struct ContextImpl<C: CkbClient> {
@@ -66,11 +66,9 @@ impl<C: CkbClient> ContextImpl<C> {
 
     async fn start_drive_loop(&mut self) -> KoResult<()> {
         let project_dep = self.assembler.prepare_transaction_project_celldep().await?;
-
-        let (project_owner, global_data) = self.assembler.get_project_owner_and_global().await?;
         self.project_context.contract_code = project_dep.lua_code.clone();
-        self.project_context.owner_lockhash = project_owner;
-        self.project_context.global_json_data = global_data;
+        self.project_context.project_owner = project_dep.contract_owner.clone();
+        self.project_context.global_cell = self.assembler.get_project_global_cell().await?;
 
         log::info!(
             "[{}] knside-out drive server started new drive loop",
@@ -121,7 +119,7 @@ impl<C: CkbClient> ContextImpl<C> {
 
     pub(self) async fn drive(&mut self, project_dep: &KoProject) -> KoResult<Option<H256>> {
         // assemble knside-out transaction
-        let (tx, receipt) = self
+        let (tx, mut receipt) = self
             .assembler
             .generate_transaction_with_inputs_and_celldeps(
                 self.config.max_reqeusts_count,
@@ -131,17 +129,16 @@ impl<C: CkbClient> ContextImpl<C> {
         if receipt.requests.is_empty() {
             return Ok(None);
         }
-        let project_owner = receipt.global_lockscript.calc_script_hash().unpack();
-        let result = self.executor.execute_lua_requests(
-            &receipt.global_json_data,
-            &project_owner,
+        let personal_outputs = self.executor.execute_lua_requests(
+            &mut receipt.global_cell,
+            &project_dep.contract_owner,
             &receipt.requests,
             &project_dep.lua_code,
             &receipt.random_seeds,
         )?;
         let mut cell_outputs = vec![KoCellOutput::new(
-            Some(result.global_json_data),
-            receipt.global_lockscript,
+            Some(receipt.global_cell.output_data.clone()),
+            receipt.global_cell.lock_script.clone(),
             0,
         )];
 
@@ -152,15 +149,14 @@ impl<C: CkbClient> ContextImpl<C> {
             .skip(1)
             .map(|input| (input.previous_output().tx_hash().unpack(), None))
             .collect::<Vec<(H256, _)>>();
-        let mut total_inputs_capacity = receipt.global_ckb;
-        result
-            .personal_outputs
+        let mut total_inputs_capacity = receipt.global_cell.capacity;
+        personal_outputs
             .into_iter()
             .enumerate()
             .for_each(|(i, output)| match output {
                 Ok((data, lock_script)) => {
                     cell_outputs.push(KoCellOutput::new(data, lock_script, 0));
-                    total_inputs_capacity += receipt.requests[i].ckb;
+                    total_inputs_capacity += receipt.requests[i].capacity;
                 }
                 Err(err) => {
                     // recover the previous cell before its request operation
@@ -175,9 +171,9 @@ impl<C: CkbClient> ContextImpl<C> {
                     cell_outputs.push(KoCellOutput::new(
                         data,
                         request.lock_script.clone(),
-                        request.payment,
+                        request.payment_ckb,
                     ));
-                    total_inputs_capacity += receipt.requests[i].ckb;
+                    total_inputs_capacity += receipt.requests[i].capacity;
                     request_hashes[i].1 = Some(err);
                 }
             });
@@ -194,8 +190,7 @@ impl<C: CkbClient> ContextImpl<C> {
         let hash = self.driver.send_transaction(tx).await?;
 
         // record last running context
-        self.project_context.global_json_data = receipt.global_json_data.clone();
-        self.project_context.owner_lockhash = project_owner;
+        self.project_context.global_cell = receipt.global_cell;
 
         // wait transaction has been confirmed for enough confirmations
         self.driver
@@ -238,8 +233,8 @@ impl<C: CkbClient> ContextImpl<C> {
             0,
         );
         self.executor.estimate_payment_ckb(
-            &self.project_context.global_json_data,
-            &self.project_context.owner_lockhash,
+            &self.project_context.global_cell,
+            &self.project_context.project_owner,
             request,
             &self.project_context.contract_code,
         )

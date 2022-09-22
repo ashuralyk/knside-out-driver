@@ -8,6 +8,7 @@ use ko_protocol::ckb_types::packed::{CellDep, CellInput, CellOutput, Script, Wit
 use ko_protocol::ckb_types::prelude::{Builder, Entity, Pack, Unpack};
 use ko_protocol::traits::{Assembler, CkbClient};
 use ko_protocol::types::assembler::{KoAssembleReceipt, KoCellOutput, KoProject, KoRequest};
+use ko_protocol::types::context::KoContextGlobalCell;
 use ko_protocol::{async_trait, KoResult, ProjectDeps, H256};
 
 mod error;
@@ -53,13 +54,11 @@ impl<C: CkbClient> AssemblerImpl<C> {
         &self.project_id_args
     }
 
-    pub async fn get_project_owner_and_global(&self) -> KoResult<(H256, Bytes)> {
+    pub async fn get_project_global_cell(&self) -> KoResult<KoContextGlobalCell> {
         let global_cell =
             helper::search_global_cell(&self.rpc_client, &self.project_code_hash, &self.project_id)
                 .await?;
-        let project_owner = global_cell.output.lock().calc_script_hash().unpack();
-        let project_global_data = global_cell.output_data;
-        Ok((project_owner, project_global_data))
+        Ok(global_cell.into())
     }
 }
 
@@ -73,7 +72,11 @@ impl<C: CkbClient> Assembler for AssemblerImpl<C> {
             .dep_type(DepType::Code.into())
             .build();
         let project_lua_code = helper::extract_project_lua_code(&project_cell.output_data)?;
-        Ok(KoProject::new(project_celldep, project_lua_code))
+        Ok(KoProject::new(
+            project_celldep,
+            project_lua_code,
+            project_cell.output.lock(),
+        ))
     }
 
     async fn generate_transaction_with_inputs_and_celldeps(
@@ -93,7 +96,7 @@ impl<C: CkbClient> Assembler for AssemblerImpl<C> {
         let mut tx = TransactionView::new_advanced_builder()
             .input(
                 CellInput::new_builder()
-                    .previous_output(global_cell.out_point)
+                    .previous_output(global_cell.out_point.clone())
                     .build(),
             )
             .cell_deps(cell_deps)
@@ -124,12 +127,12 @@ impl<C: CkbClient> Assembler for AssemblerImpl<C> {
                         // println!("[WARN] find invalid reqeust format");
                         return Ok(());
                     }
-                    let flag_2 =
-                        ko_protocol::mol_flag_2_raw(&output.lock().args().raw_data().to_vec())
-                            .expect("flag_2 molecule");
-                    let lock_script = Script::from_slice(&flag_2.caller_lockscript().raw_data())
-                        .map_err(|_| AssemblerError::UnsupportedCallerScriptFormat)?;
-                    let recipient_script = {
+                    let flag_2 = ko_protocol::mol_flag_2_raw(&output.lock().args().raw_data())
+                        .expect("flag_2 molecule");
+                    let caller_lockscript =
+                        Script::from_slice(&flag_2.caller_lockscript().raw_data())
+                            .map_err(|_| AssemblerError::UnsupportedCallerScriptFormat)?;
+                    let recipient_lockscript = {
                         let script = flag_2.recipient_lockscript().to_opt();
                         if let Some(inner) = script {
                             let script = Script::from_slice(&inner.raw_data())
@@ -139,7 +142,7 @@ impl<C: CkbClient> Assembler for AssemblerImpl<C> {
                             None
                         }
                     };
-                    let payment = {
+                    let payment_ckb = {
                         let capacity: u64 = output.capacity().unpack();
                         let exact_capacity = output
                             .occupied_capacity(Capacity::bytes(cell.output_data.len()).unwrap())
@@ -150,9 +153,9 @@ impl<C: CkbClient> Assembler for AssemblerImpl<C> {
                     requests.push(KoRequest::new(
                         cell.output_data.into_bytes(),
                         flag_2.function_call().raw_data(),
-                        lock_script,
-                        recipient_script,
-                        payment,
+                        caller_lockscript,
+                        recipient_lockscript,
+                        payment_ckb,
                         output.capacity().unpack(),
                     ));
                     let input = CellInput::new_builder()
@@ -169,13 +172,7 @@ impl<C: CkbClient> Assembler for AssemblerImpl<C> {
         }
         let mut random_bytes = [0u8; 16];
         blake2b.finalize(&mut random_bytes);
-        let receipt = KoAssembleReceipt::new(
-            requests,
-            global_cell.output_data,
-            global_cell.output.lock(),
-            global_cell.output.capacity().unpack(),
-            random_bytes,
-        );
+        let receipt = KoAssembleReceipt::new(requests, global_cell.into(), random_bytes);
         Ok((tx, receipt))
     }
 

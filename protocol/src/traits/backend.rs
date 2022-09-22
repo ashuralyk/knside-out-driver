@@ -7,7 +7,6 @@ pub trait Backend: Send + Sync {
         &mut self,
         contract: Bytes,
         address: String,
-        management: bool,
         project_deps: &ProjectDeps,
     ) -> KoResult<(H256, H256)>;
 

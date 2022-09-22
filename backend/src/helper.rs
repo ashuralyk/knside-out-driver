@@ -121,7 +121,11 @@ pub fn parse_contract_code(contract: &Bytes) -> KoResult<Vec<u8>> {
     Ok(function.dump(true))
 }
 
-pub fn get_global_json_data(contract: &Bytes) -> KoResult<(String, Vec<u8>)> {
+pub fn get_global_json_data(
+    contract: &Bytes,
+    contract_owner: &String,
+    driver_manager: &String,
+) -> KoResult<(String, bool, Vec<u8>)> {
     let lua = mlua::Lua::new();
     let function = lua
         .load(contract.as_ref())
@@ -134,12 +138,42 @@ pub fn get_global_json_data(contract: &Bytes) -> KoResult<(String, Vec<u8>)> {
         .globals()
         .get("construct")
         .map_err(|err| BackendError::MissConstructFunction(err.to_string()))?;
-    let global_data = func_init_global
+    let context = {
+        let table = lua
+            .create_table()
+            .map_err(|err| BackendError::CreateKOCTableError(err.to_string()))?;
+        table
+            .set("owner", contract_owner.clone())
+            .map_err(|err| BackendError::CreateKOCTableError(err.to_string()))?;
+        table
+            .set("driver", driver_manager.clone())
+            .map_err(|err| BackendError::CreateKOCTableError(err.to_string()))?;
+        table
+    };
+    lua.globals()
+        .set("KOC", context)
+        .map_err(|err| BackendError::InjectKOCContextError(err.to_string()))?;
+    let global_driver_data = func_init_global
         .call::<_, mlua::Table>(())
         .map_err(|err| BackendError::MissConstructFunction(err.to_string()))?;
+    // check contract driver selection
+    let global_driver: String = global_driver_data
+        .get("driver")
+        .map_err(|err| BackendError::InvalidConstructReturnType(err.to_string()))?;
+    if &global_driver != contract_owner || &global_driver != driver_manager {
+        return Err(BackendError::InvalidSpecificContractDriver.into());
+    }
+    // parse json format global data
+    let global_data: mlua::Table = global_driver_data
+        .get("global")
+        .map_err(|err| BackendError::InvalidConstructReturnType(err.to_string()))?;
     let global_data_json = serde_json::to_string(&global_data)
         .map_err(|err| BackendError::GlobalTableNotJsonify(err.to_string()))?;
-    Ok((global_data_json, function.dump(true)))
+    Ok((
+        global_data_json,
+        &global_driver == contract_owner,
+        function.dump(true),
+    ))
 }
 
 pub fn calc_outputs_capacity(outputs: &[CellOutput], fee: &str) -> u64 {
