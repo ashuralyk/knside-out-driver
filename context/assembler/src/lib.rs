@@ -1,5 +1,6 @@
 use ckb_hash::{Blake2bBuilder, CKB_HASH_PERSONALIZATION};
 
+use helper::{clone_with_new_capacity, fill_transaction_capacity_diff, get_extractable_capacity};
 use ko_protocol::ckb_sdk::constants::TYPE_ID_CODE_HASH;
 use ko_protocol::ckb_sdk::rpc::ckb_indexer::{ScriptType, SearchKey};
 use ko_protocol::ckb_types::bytes::Bytes;
@@ -71,10 +72,9 @@ impl<C: CkbClient> Assembler for AssemblerImpl<C> {
             .out_point(project_cell.out_point)
             .dep_type(DepType::Code.into())
             .build();
-        let project_lua_code = helper::extract_project_lua_code(&project_cell.output_data)?;
         Ok(KoProject::new(
             project_celldep,
-            project_lua_code,
+            project_cell.output_data,
             project_cell.output.lock(),
         ))
     }
@@ -101,6 +101,7 @@ impl<C: CkbClient> Assembler for AssemblerImpl<C> {
             )
             .cell_deps(cell_deps)
             .build();
+
         // fill transaction inputs and collect KnsideOut requests
         let mut requests = vec![];
         let search_key = SearchKey {
@@ -170,6 +171,8 @@ impl<C: CkbClient> Assembler for AssemblerImpl<C> {
             }
             after = Some(result.last_cursor);
         }
+
+        // make random seed
         let mut random_bytes = [0u8; 16];
         blake2b.finalize(&mut random_bytes);
         let receipt = KoAssembleReceipt::new(requests, global_cell.into(), random_bytes);
@@ -181,73 +184,78 @@ impl<C: CkbClient> Assembler for AssemblerImpl<C> {
         mut tx: TransactionView,
         cell_outputs: &[KoCellOutput],
         inputs_capacity: u64,
+        fee: u64,
     ) -> KoResult<TransactionView> {
         // collect output cells and their total capacity
         let mut outputs = vec![];
-        let mut outputs_capacity = 0u64;
+        let mut outputs_capacity = fee;
         let mut outputs_data = vec![];
         cell_outputs.iter().enumerate().for_each(|(i, output)| {
-            let type_ = if i == 0 {
-                helper::make_global_script(&self.project_code_hash, &self.project_id)
-            } else {
-                helper::make_personal_script(&self.project_code_hash, &self.project_id)
-            };
+            let mut cell_output = CellOutput::new_builder()
+                .lock(output.lock_script.clone())
+                .build_exact_capacity(Capacity::zero())
+                .unwrap();
+            let mut cell_output_data = Bytes::new();
+
+            // handle cell which will contain personal json data
             if let Some(data) = &output.data {
-                let capacity =
-                    Capacity::bytes(data.len()).unwrap().as_u64() + output.extra_capacity;
-                outputs.push(
-                    CellOutput::new_builder()
-                        .lock(output.lock_script.clone())
-                        .type_(Some(type_).pack())
-                        .build_exact_capacity(Capacity::shannons(capacity))
-                        .unwrap(),
-                );
-                outputs_data.push(data.clone());
-            } else {
-                outputs.push(
-                    CellOutput::new_builder()
-                        .lock(output.lock_script.clone())
-                        .build_exact_capacity(Capacity::shannons(output.extra_capacity))
-                        .unwrap(),
-                );
-                outputs_data.push(Bytes::new());
+                let type_ = if i == 0 {
+                    helper::make_global_script(&self.project_code_hash, &self.project_id)
+                } else {
+                    helper::make_personal_script(&self.project_code_hash, &self.project_id)
+                };
+                cell_output = cell_output
+                    .as_builder()
+                    .type_(Some(type_).pack())
+                    .build_exact_capacity(Capacity::bytes(data.len()).unwrap())
+                    .unwrap();
+                cell_output_data = data.clone();
             }
-            let capacity: u64 = outputs.last().unwrap().capacity().unpack();
+
+            // handle cell in which the capacity needs to use the one from request
+            if output.capacity > cell_output.capacity().unpack() {
+                cell_output = cell_output
+                    .as_builder()
+                    .capacity(Capacity::shannons(output.capacity).pack())
+                    .build();
+            }
+            let capacity: u64 = cell_output.capacity().unpack();
             outputs_capacity += capacity;
+            outputs.push(cell_output);
+            outputs_data.push(cell_output_data);
         });
-        // firstly check inputs/outputs capacity
-        if inputs_capacity <= outputs_capacity {
-            return Err(AssemblerError::InsufficientGlobalCellCapacity(
-                inputs_capacity,
-                outputs_capacity,
-            )
-            .into());
+
+        // check inputs/outputs capacity
+        let capacity: u64 = outputs[0].capacity().unpack();
+        if inputs_capacity >= outputs_capacity {
+            outputs[0] =
+                clone_with_new_capacity(&outputs[0], inputs_capacity - outputs_capacity + capacity);
+        } else {
+            let diff = outputs_capacity - inputs_capacity;
+            let change_room = get_extractable_capacity(&outputs[0], outputs_data[0].len());
+            if change_room >= diff {
+                outputs[0] = clone_with_new_capacity(&outputs[0], capacity - diff);
+            } else {
+                outputs[0] = clone_with_new_capacity(&outputs[0], capacity - change_room);
+                fill_transaction_capacity_diff(
+                    &self.rpc_client,
+                    &outputs[0].lock(),
+                    diff - change_room,
+                    &mut tx,
+                    &mut outputs,
+                    &mut outputs_data,
+                )
+                .await?;
+            }
         }
-        // complete transaction outputs
-        let fee = Capacity::bytes(1).unwrap().as_u64();
-        let global_capacity: u64 = {
-            let capacity: u64 = outputs[0].capacity().unpack();
-            inputs_capacity - outputs_capacity - fee + capacity
-        };
-        outputs[0] = outputs[0]
-            .clone()
-            .as_builder()
-            .capacity(global_capacity.pack())
-            .build();
+
+        // complete partial tx
         tx = tx
             .as_advanced_builder()
             .outputs(outputs)
             .outputs_data(outputs_data.pack())
             .build();
-        // secondly check inputs/outputs capacity as a barrier
-        let outputs_capacity = tx.outputs_capacity().unwrap().as_u64();
-        if inputs_capacity <= outputs_capacity {
-            return Err(AssemblerError::TransactionCapacityError(
-                inputs_capacity,
-                outputs_capacity,
-            )
-            .into());
-        }
+
         Ok(tx)
     }
 

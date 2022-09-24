@@ -6,7 +6,7 @@ use ko_protocol::ckb_types::bytes::Bytes;
 use ko_protocol::ckb_types::core::TransactionView;
 use ko_protocol::secp256k1::SecretKey;
 use ko_protocol::traits::{Backend, CkbClient, Driver};
-use ko_protocol::{hex, serde_json, tokio, TestVars::*};
+use ko_protocol::{serde_json, tokio, TestVars::*};
 use ko_rpc_client::RpcClient;
 
 use crate::BackendImpl;
@@ -44,7 +44,7 @@ async fn deploy_project_deployment_cell() {
     let mut backend = BackendImpl::new(&rpc_client, MockContextrpc::default());
     let (digest, type_args) = backend
         .create_project_deploy_digest(
-            Bytes::from(hex::encode(lua_code).as_bytes().to_vec()),
+            Bytes::from(lua_code.as_bytes().to_vec()),
             OWNER_ADDRESS.into(),
             &PROJECT_VARS,
         )
@@ -80,7 +80,7 @@ async fn update_project_deployment_cell() {
     let mut backend = BackendImpl::new(&rpc_client, MockContextrpc::default());
     let digest = backend
         .create_project_upgrade_digest(
-            Bytes::from(hex::encode(lua_code).as_bytes().to_vec()),
+            Bytes::from(lua_code.as_bytes().to_vec()),
             OWNER_ADDRESS.into(),
             &PROJECT_TYPE_ARGS.into(),
             &PROJECT_VARS,
@@ -112,7 +112,7 @@ async fn request_project_request_cell() {
     );
     let mut backend = BackendImpl::new(&rpc_client, MockContextrpc::default());
     let mut previous_cell = None;
-    let function_call = "battle_win()".into();
+    let function_call = "claim_nfts()".into();
     if function_call == "claim_nfts" {
         // search previous personal cell
         let personal_data = backend

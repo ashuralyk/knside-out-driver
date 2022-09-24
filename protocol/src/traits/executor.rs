@@ -1,9 +1,8 @@
 use ckb_types::bytes::Bytes;
 use ckb_types::packed::Script;
 
-use crate::types::assembler::KoRequest;
+use crate::types::assembler::{KoCellOutput, KoRequest};
 use crate::types::context::KoContextGlobalCell;
-use crate::types::executor::KoExecutedRequest;
 use crate::KoResult;
 
 pub trait Executor {
@@ -14,7 +13,7 @@ pub trait Executor {
         user_requests: &[KoRequest],
         project_lua_code: &Bytes,
         random_seeds: &[i64; 2],
-    ) -> KoResult<Vec<KoExecutedRequest>>;
+    ) -> KoResult<Vec<KoResult<KoCellOutput>>>;
 
     fn estimate_payment_ckb(
         &self,

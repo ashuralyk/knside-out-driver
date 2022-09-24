@@ -25,11 +25,8 @@ pub enum AssemblerError {
     #[display(fmt = "Recipient lock_script format is not supported")]
     UnsupportedRecipientScriptFormat,
 
-    #[display(fmt = "{} < {}", _0, _1)]
-    InsufficientGlobalCellCapacity(u64, u64),
-
-    #[display(fmt = "Transaction capacity mismatch ({}:{})", _0, _1)]
-    TransactionCapacityError(u64, u64),
+    #[display(fmt = "need more {} ckbs", _0)]
+    InsufficientCellCapacity(u64),
 }
 
 impl std::error::Error for AssemblerError {}

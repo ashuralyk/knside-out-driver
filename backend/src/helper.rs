@@ -137,7 +137,7 @@ pub fn get_global_json_data(
     let func_init_global: mlua::Function = lua
         .globals()
         .get("construct")
-        .map_err(|err| BackendError::MissConstructFunction(err.to_string()))?;
+        .map_err(|err| BackendError::ConstructFunctionError(err.to_string()))?;
     let context = {
         let table = lua
             .create_table()
@@ -155,7 +155,7 @@ pub fn get_global_json_data(
         .map_err(|err| BackendError::InjectKOCContextError(err.to_string()))?;
     let global_driver_data = func_init_global
         .call::<_, mlua::Table>(())
-        .map_err(|err| BackendError::MissConstructFunction(err.to_string()))?;
+        .map_err(|err| BackendError::ConstructFunctionError(err.to_string()))?;
     // check contract driver selection
     let global_driver: String = global_driver_data
         .get("driver")
@@ -169,11 +169,9 @@ pub fn get_global_json_data(
         .map_err(|err| BackendError::InvalidConstructReturnType(err.to_string()))?;
     let global_data_json = serde_json::to_string(&global_data)
         .map_err(|err| BackendError::GlobalTableNotJsonify(err.to_string()))?;
-    Ok((
-        global_data_json,
-        &global_driver == contract_owner,
-        function.dump(true),
-    ))
+    let dump = function.dump(true);
+    println!("len = {}", dump.len());
+    Ok((global_data_json, &global_driver == contract_owner, dump))
 }
 
 pub fn calc_outputs_capacity(outputs: &[CellOutput], fee: &str) -> u64 {

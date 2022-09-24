@@ -19,6 +19,7 @@ pub trait Assembler {
         tx: TransactionView,
         cell_outputs: &[KoCellOutput],
         inputs_capacity: u64,
+        fee: u64,
     ) -> KoResult<TransactionView>;
 
     fn complete_transaction_with_signature(

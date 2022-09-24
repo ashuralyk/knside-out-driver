@@ -12,8 +12,7 @@ use ko_protocol::serde_json::to_string;
 use ko_protocol::tokio::sync::mpsc::unbounded_channel;
 use ko_protocol::traits::{Backend, CkbClient, ContextRpc};
 use ko_protocol::{
-    async_trait, hex, log, mol_deployment, mol_flag_0, mol_flag_1, mol_flag_2, KoResult,
-    ProjectDeps, H256,
+    async_trait, hex, log, mol_flag_0, mol_flag_1, mol_flag_2, KoResult, ProjectDeps, H256,
 };
 
 #[cfg(test)]
@@ -75,13 +74,12 @@ impl<C: CkbClient, R: ContextRpc> Backend for BackendImpl<C, R> {
             &project_deps.project_code_hash,
             mol_flag_0(&[0u8; 32]).as_slice(),
         );
-        let deployment = mol_deployment(&contract_bytecode).as_bytes();
         let mut outputs = vec![
             // project cell
             CellOutput::new_builder()
                 .lock(secp256k1_script.clone())
                 .type_(helper::build_type_id_script(None, 0))
-                .build_exact_capacity(Capacity::bytes(deployment.len()).unwrap())
+                .build_exact_capacity(Capacity::bytes(contract_bytecode.len()).unwrap())
                 .unwrap(),
             // global cell
             CellOutput::new_builder()
@@ -96,7 +94,7 @@ impl<C: CkbClient, R: ContextRpc> Backend for BackendImpl<C, R> {
                 .unwrap(),
         ];
         let outputs_data = vec![
-            deployment,
+            Bytes::from(contract_bytecode),
             Bytes::from(global_data_json.as_bytes().to_vec()),
             Bytes::default(),
         ];
@@ -198,13 +196,13 @@ impl<C: CkbClient, R: ContextRpc> Backend for BackendImpl<C, R> {
             .payload()
             .into();
         let previous_type_script = deployment_cell.output.type_.as_ref().unwrap();
-        let deployment = mol_deployment(&helper::parse_contract_code(&contract)?).as_bytes();
+        let contract_bytecode = helper::parse_contract_code(&contract)?;
         let mut outputs = vec![
             // new project deployment cell
             CellOutput::new_builder()
                 .lock(secp256k1_script.clone())
                 .type_(Some(previous_type_script.clone().into()).pack())
-                .build_exact_capacity(Capacity::bytes(deployment.len()).unwrap())
+                .build_exact_capacity(Capacity::bytes(contract_bytecode.len()).unwrap())
                 .unwrap(),
             // change cell
             CellOutput::new_builder()
@@ -212,7 +210,7 @@ impl<C: CkbClient, R: ContextRpc> Backend for BackendImpl<C, R> {
                 .build_exact_capacity(Capacity::zero())
                 .unwrap(),
         ];
-        let outputs_data = vec![deployment, Bytes::new()];
+        let outputs_data = vec![Bytes::from(contract_bytecode), Bytes::new()];
         let outputs_capacity = helper::calc_outputs_capacity(&outputs, "1.0");
 
         // fill kinside-out transaction inputs

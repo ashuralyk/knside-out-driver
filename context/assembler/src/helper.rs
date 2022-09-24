@@ -1,11 +1,12 @@
 use ko_protocol::ckb_sdk::constants::TYPE_ID_CODE_HASH;
 use ko_protocol::ckb_sdk::rpc::ckb_indexer::{ScriptType, SearchKey};
 use ko_protocol::ckb_sdk::traits::LiveCell;
-use ko_protocol::ckb_types::packed::{CellOutput, Script};
-use ko_protocol::ckb_types::prelude::{Builder, Entity, Pack};
-use ko_protocol::ckb_types::{bytes::Bytes, core::ScriptHashType};
+use ko_protocol::ckb_types::bytes::Bytes;
+use ko_protocol::ckb_types::core::{Capacity, ScriptHashType, TransactionView};
+use ko_protocol::ckb_types::packed::{CellInput, CellOutput, Script};
+use ko_protocol::ckb_types::prelude::{Builder, Entity, Pack, Unpack};
 use ko_protocol::traits::CkbClient;
-use ko_protocol::{is_mol_flag_2, mol_deployment_raw, mol_flag_0, mol_flag_1, KoResult, H256};
+use ko_protocol::{is_mol_flag_2, mol_flag_0, mol_flag_1, KoResult, H256};
 
 use crate::error::AssemblerError;
 
@@ -87,10 +88,76 @@ pub fn check_valid_request(cell: &CellOutput, code_hash: &H256) -> bool {
     true
 }
 
-pub fn extract_project_lua_code(deployment_bytes: &Bytes) -> KoResult<Bytes> {
-    if let Some(deployment) = mol_deployment_raw(deployment_bytes) {
-        Ok(deployment.code().raw_data())
-    } else {
-        Err(AssemblerError::UnsupportedDeploymentFormat.into())
+pub async fn fill_transaction_capacity_diff(
+    rpc: &impl CkbClient,
+    lock_script: &Script,
+    mut capacity_diff: u64,
+    tx: &mut TransactionView,
+    outputs: &mut Vec<CellOutput>,
+    outputs_data: &mut Vec<Bytes>,
+) -> KoResult<()> {
+    // append change cell for storing change ckb
+    let mut change_cell = CellOutput::new_builder()
+        .lock(lock_script.clone())
+        .build_exact_capacity(Capacity::zero())
+        .unwrap();
+    let capacity: u64 = change_cell.capacity().unpack();
+    capacity_diff += capacity;
+
+    // search avaliable input cells
+    let search_key = SearchKey {
+        script: lock_script.clone().into(),
+        script_type: ScriptType::Lock,
+        filter: None,
+    };
+    let mut after = None;
+    let mut searched_capacity = 0u64;
+    let mut cells = vec![];
+    while searched_capacity < capacity_diff {
+        let result = rpc
+            .fetch_live_cells(search_key.clone(), 1, after)
+            .await
+            .map_err(|_| AssemblerError::MissProjectRequestCell)?;
+        let cell = &result.objects[0];
+        let capacity: u64 = cell.output.capacity.into();
+        searched_capacity += capacity;
+        cells.push(
+            CellInput::new_builder()
+                .previous_output(cell.out_point.clone().into())
+                .build(),
+        );
+        if result.last_cursor.is_empty() {
+            break;
+        }
+        after = Some(result.last_cursor);
     }
+    if searched_capacity < capacity_diff {
+        return Err(
+            AssemblerError::InsufficientCellCapacity(capacity_diff - searched_capacity).into(),
+        );
+    }
+
+    // complete transaction parts
+    change_cell = change_cell
+        .as_builder()
+        .capacity(Capacity::shannons(searched_capacity - capacity_diff + capacity).pack())
+        .build();
+    outputs.push(change_cell);
+    outputs_data.push(Bytes::new());
+    *tx = tx.as_advanced_builder().inputs(cells).build();
+
+    Ok(())
+}
+
+pub fn get_extractable_capacity(cell: &CellOutput, data_len: usize) -> u64 {
+    let capacity: u64 = cell.capacity().unpack();
+    let occupied_capacity: u64 = cell
+        .occupied_capacity(Capacity::bytes(data_len).unwrap())
+        .unwrap()
+        .as_u64();
+    capacity - occupied_capacity
+}
+
+pub fn clone_with_new_capacity(cell: &CellOutput, capacity: u64) -> CellOutput {
+    cell.clone().as_builder().capacity(capacity.pack()).build()
 }

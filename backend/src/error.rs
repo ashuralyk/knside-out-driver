@@ -8,7 +8,7 @@ pub enum BackendError {
     BadContractByteCode(String),
 
     #[display(fmt = "Throw error while calling `construct()`, error = {}", _0)]
-    MissConstructFunction(String),
+    ConstructFunctionError(String),
 
     #[display(fmt = "Cannot create KOC global table, error = {}", _0)]
     CreateKOCTableError(String),

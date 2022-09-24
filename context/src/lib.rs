@@ -139,7 +139,7 @@ impl<C: CkbClient> ContextImpl<C> {
         let mut cell_outputs = vec![KoCellOutput::new(
             Some(receipt.global_cell.output_data.clone()),
             receipt.global_cell.lock_script.clone(),
-            0,
+            receipt.global_cell.capacity,
         )];
 
         // trim unworkable requests from transaction inputs
@@ -154,8 +154,8 @@ impl<C: CkbClient> ContextImpl<C> {
             .into_iter()
             .enumerate()
             .for_each(|(i, output)| match output {
-                Ok((data, lock_script)) => {
-                    cell_outputs.push(KoCellOutput::new(data, lock_script, 0));
+                Ok(output_assemble) => {
+                    cell_outputs.push(output_assemble);
                     total_inputs_capacity += receipt.requests[i].capacity;
                 }
                 Err(err) => {
@@ -171,7 +171,7 @@ impl<C: CkbClient> ContextImpl<C> {
                     cell_outputs.push(KoCellOutput::new(
                         data,
                         request.lock_script.clone(),
-                        request.payment_ckb,
+                        request.capacity,
                     ));
                     total_inputs_capacity += receipt.requests[i].capacity;
                     request_hashes[i].1 = Some(err);
@@ -181,7 +181,7 @@ impl<C: CkbClient> ContextImpl<C> {
         // complete transaction
         let tx = self
             .assembler
-            .fill_transaction_with_outputs(tx, &cell_outputs, total_inputs_capacity)
+            .fill_transaction_with_outputs(tx, &cell_outputs, total_inputs_capacity, 100_000_000)
             .await?;
         let signature = self.driver.sign_transaction(&tx);
         let tx = self
