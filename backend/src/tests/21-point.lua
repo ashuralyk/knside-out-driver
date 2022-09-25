@@ -27,7 +27,7 @@ function withdraw(quantity)
 end
 
 function battle_win()
-    -- assert(KOC.ckb_deposit(200), "claim_nft() ckb not enough")
+    assert(KOC.ckb_deposit(200), "claim_nft() ckb not enough")
     local sender = KOC.user
     local global = KOC.global
     global.battle_count = global.battle_count + 1
@@ -56,7 +56,7 @@ function battle_lose()
 end
 
 function claim_nfts()
-    -- assert(KOC.ckb_deposit(200), "claim_nft() ckb not enough")
+    assert(KOC.ckb_deposit(200), "claim_nft() ckb not enough")
     local personal = assert(KOC.global.personals[KOC.user], 'no user')
     local nfts = personal.nfts or {}
     assert(#nfts > 0, "no nfts")
@@ -67,6 +67,7 @@ function claim_nfts()
             table.insert(data, nft_id)
         end
     else
-        KOC.personal = nfts
+        data = nfts
     end
+    KOC.personal = data
 end

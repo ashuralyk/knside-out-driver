@@ -28,7 +28,7 @@ async fn main() -> KoResult<()> {
 
     // initail log system
     log::set_boxed_logger(Box::new(Logger))
-        .map(|_| log::set_max_level(log::LevelFilter::Info))
+        .map(|_| log::set_max_level(log::LevelFilter::Debug))
         .expect("logger");
 
     let config_path = matches.value_of("config_path").unwrap();
@@ -96,7 +96,7 @@ async fn main() -> KoResult<()> {
 
     tokio::select! {
         _ = ctrl_c_handler => {
-            log::warn!("ctrl-c is pressed, quit knside-out")
+            println!("<Ctrl-C> is pressed, quit knside-out")
         }
         Some(panic_info) = panic_receiver.recv() => {
             log::warn!("child thread paniced: {}", panic_info)

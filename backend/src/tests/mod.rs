@@ -1,5 +1,3 @@
-mod mock_rpc;
-
 use ko_context::ContextImpl;
 use ko_protocol::ckb_jsonrpc_types::TransactionView as JsonTxView;
 use ko_protocol::ckb_types::bytes::Bytes;
@@ -10,7 +8,6 @@ use ko_protocol::{serde_json, tokio, TestVars::*};
 use ko_rpc_client::RpcClient;
 
 use crate::BackendImpl;
-use mock_rpc::MockContextrpc;
 
 fn sign(ctx: &ContextImpl<impl CkbClient>, tx: TransactionView) -> [u8; 65] {
     println!(
@@ -41,7 +38,7 @@ async fn deploy_project_deployment_cell() {
         &PROJECT_VARS,
         &DRIVE_CONFIG,
     );
-    let mut backend = BackendImpl::new(&rpc_client, MockContextrpc::default());
+    let mut backend = BackendImpl::new(&rpc_client, MockContextRpc::default());
     let (digest, type_args) = backend
         .create_project_deploy_digest(
             Bytes::from(lua_code.as_bytes().to_vec()),
@@ -77,7 +74,7 @@ async fn update_project_deployment_cell() {
         &PROJECT_VARS,
         &DRIVE_CONFIG,
     );
-    let mut backend = BackendImpl::new(&rpc_client, MockContextrpc::default());
+    let mut backend = BackendImpl::new(&rpc_client, MockContextRpc::default());
     let digest = backend
         .create_project_upgrade_digest(
             Bytes::from(lua_code.as_bytes().to_vec()),
@@ -110,9 +107,9 @@ async fn request_project_request_cell() {
         &PROJECT_VARS,
         &DRIVE_CONFIG,
     );
-    let mut backend = BackendImpl::new(&rpc_client, MockContextrpc::default());
+    let mut backend = BackendImpl::new(&rpc_client, MockContextRpc::default());
     let mut previous_cell = None;
-    let function_call = "claim_nfts()".into();
+    let function_call = "battle_win()".into();
     if function_call == "claim_nfts" {
         // search previous personal cell
         let personal_data = backend
@@ -167,7 +164,7 @@ async fn request_project_request_cell() {
 #[tokio::test]
 async fn fetch_global_json_data() {
     let rpc_client = RpcClient::new(CKB_URL, CKB_INDEXER_URL);
-    let global_data = BackendImpl::new(&rpc_client, MockContextrpc::default())
+    let global_data = BackendImpl::new(&rpc_client, MockContextRpc::default())
         .search_global_data(&PROJECT_TYPE_ARGS.into(), &PROJECT_VARS)
         .await
         .expect("search global");
@@ -177,7 +174,7 @@ async fn fetch_global_json_data() {
 #[tokio::test]
 async fn fetch_personal_json_data() {
     let rpc_client = RpcClient::new(CKB_URL, CKB_INDEXER_URL);
-    let personal_data = BackendImpl::new(&rpc_client, MockContextrpc::default())
+    let personal_data = BackendImpl::new(&rpc_client, MockContextRpc::default())
         .search_personal_data(
             OWNER_ADDRESS.into(),
             &PROJECT_TYPE_ARGS.into(),

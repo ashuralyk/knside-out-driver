@@ -8,7 +8,7 @@ pub trait ContextRpc: Send + Sync {
     async fn start_project_driver(&mut self, project_type_args: &H256) -> bool;
 
     async fn estimate_payment_ckb(
-        &self,
+        &mut self,
         project_type_args: &H256,
         sender: &Script,
         method_call: &str,
@@ -18,7 +18,7 @@ pub trait ContextRpc: Send + Sync {
     ) -> bool;
 
     async fn listen_request_committed(
-        &self,
+        &mut self,
         project_type_args: &H256,
         request_hash: &H256,
         response: UnboundedSender<KoResult<H256>>,

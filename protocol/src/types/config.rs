@@ -29,7 +29,7 @@ pub struct KoDriveConfig {
     pub drive_interval_sec: u8,
     pub max_reqeusts_count: u8,
     pub block_confirms_count: u8,
-    pub kickout_duration_sec: u64,
+    pub kickout_idle_sec: u64,
 }
 
 #[derive(Deserialize)]

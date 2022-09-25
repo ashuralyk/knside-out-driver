@@ -1,5 +1,3 @@
-mod mock_rpc;
-
 use std::str::FromStr;
 
 use ko_backend::BackendImpl;
@@ -12,7 +10,6 @@ use ko_rpc_server::RpcServer;
 
 use jsonrpsee::core::{client::ClientT, rpc_params};
 use jsonrpsee::http_client::{HttpClient, HttpClientBuilder};
-use mock_rpc::MockContextrpc;
 
 const JSONRPC_PORT: &str = "127.0.0.1:8090";
 
@@ -20,7 +17,7 @@ async fn create_server_and_client(with_server: bool) -> HttpClient {
     // start rpc server
     if with_server {
         let rpc_client = RpcClient::new(CKB_URL, CKB_INDEXER_URL);
-        let backend = BackendImpl::new(&rpc_client, MockContextrpc::default());
+        let backend = BackendImpl::new(&rpc_client, MockContextRpc::default());
         let handle = RpcServer::<_>::start(JSONRPC_PORT, backend, &PROJECT_VARS)
             .await
             .expect("start rpc server");
@@ -62,7 +59,7 @@ async fn call_contract_method() {
                 "ko_makeRequestTransactionDigest",
                 rpc_params!(
                     String::from(OWNER_ADDRESS),
-                    String::from("battle_win()"),
+                    String::from("claim_nfts()"),
                     Option::<String>::None,
                     Option::<OutPoint>::None,
                     PROJECT_TYPE_ARGS
@@ -99,9 +96,12 @@ async fn call_contract_method() {
     println!("hash = {}", hash);
 
     // wait committed
-    let hash = H256::from_str(&hash[2..]).unwrap();
+    let hash = H256::from_str(hash.trim_start_matches("0x")).unwrap();
     let committed_hash: Option<H256> = client
-        .request("ko_waitRequestTransactionCommitted", rpc_params!(hash))
+        .request(
+            "ko_waitRequestTransactionCommitted",
+            rpc_params!(hash, PROJECT_TYPE_ARGS),
+        )
         .await
         .expect("server commit");
     println!("committed = {}", hex::encode(&committed_hash.unwrap()));

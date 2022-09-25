@@ -67,12 +67,16 @@ pub struct Logger;
 
 impl Log for Logger {
     fn enabled(&self, metadata: &Metadata) -> bool {
-        metadata.level() <= Level::Debug
+        if metadata.target().starts_with("ko_") {
+            metadata.level() <= Level::Debug
+        } else {
+            false
+        }
     }
 
     fn log(&self, record: &Record) {
         if self.enabled(record.metadata()) {
-            println!("{} - {}", record.level(), record.args());
+            println!("{: >5} -> {}", record.level(), record.args());
         }
     }
 
@@ -123,5 +127,36 @@ pub mod TestVars {
             ]
         );
         pub static ref DRIVE_CONFIG: KoDriveConfig = KoDriveConfig::new(3, 10, 3, 100);
+    }
+
+    #[derive(Default, Clone, Copy)]
+    pub struct MockContextRpc {}
+}
+
+#[async_trait]
+impl traits::ContextRpc for TestVars::MockContextRpc {
+    async fn start_project_driver(&mut self, _project_type_args: &H256) -> bool {
+        false
+    }
+
+    async fn estimate_payment_ckb(
+        &mut self,
+        _project_type_args: &H256,
+        _sender: &ckb_types::packed::Script,
+        _method_call: &str,
+        _previous_json_data: &str,
+        _recipient: &Option<ckb_types::packed::Script>,
+        _response: tokio::sync::mpsc::UnboundedSender<KoResult<u64>>,
+    ) -> bool {
+        false
+    }
+
+    async fn listen_request_committed(
+        &mut self,
+        _project_type_args: &H256,
+        _request_hash: &H256,
+        _response: tokio::sync::mpsc::UnboundedSender<KoResult<H256>>,
+    ) -> bool {
+        false
     }
 }

@@ -224,7 +224,7 @@ impl<C: CkbClient, R: ContextRpc> Backend for BackendImpl<C, R> {
             helper::fetch_live_cells(&self.rpc_client, search, inputs_capacity, outputs_capacity)
                 .await?;
         log::debug!(
-            "inputs_&capacity = {}, outputs_capacity = {}",
+            "inputs_capacity = {}, outputs_capacity = {}",
             inputs_capacity,
             outputs_capacity
         );

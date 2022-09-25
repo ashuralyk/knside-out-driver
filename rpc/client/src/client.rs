@@ -1,13 +1,8 @@
 use futures::FutureExt;
 use reqwest::{Client, Url};
-use std::{
-    future::Future,
-    io,
-    sync::{
-        atomic::{AtomicU64, Ordering},
-        Arc,
-    },
-};
+use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::Arc;
+use std::{future::Future, io};
 
 use ko_protocol::ckb_jsonrpc_types::{
     BlockNumber, BlockView, CellWithStatus, HeaderView, JsonBytes, OutPoint, OutputsValidator,

@@ -74,8 +74,9 @@ impl<C: CkbClient> ContextImpl<C> {
             "[{}] knside-out drive server started new drive loop",
             self.assembler.get_project_args()
         );
+
         let drive_interval = Duration::from_secs(self.config.drive_interval_sec as u64);
-        let max_idle_duration = Duration::from_secs(self.config.kickout_duration_sec);
+        let max_idle_duration = Duration::from_secs(self.config.kickout_idle_sec);
         loop {
             tokio::select! {
                 _ = tokio::time::sleep(self.drive_interval) => {
@@ -114,6 +115,11 @@ impl<C: CkbClient> ContextImpl<C> {
                 }
             }
         }
+
+        log::info!(
+            "[{}] knside-out driver kicked out for a long time idle",
+            self.assembler.get_project_args()
+        );
         Ok(())
     }
 
@@ -249,10 +255,8 @@ impl<C: CkbClient> ContextImpl<C> {
     }
 
     pub async fn run(mut self) {
-        loop {
-            if let Err(error) = self.start_drive_loop().await {
-                log::error!("[{}] {}", self.assembler.get_project_args(), error);
-            }
+        while let Err(error) = self.start_drive_loop().await {
+            log::error!("[{}] {}", self.assembler.get_project_args(), error);
             tokio::time::sleep(self.drive_interval).await;
         }
     }
@@ -307,6 +311,23 @@ impl<C: CkbClient + 'static> ContextMgr<C> {
             .map(|(hash, context)| (hash.clone(), !context.0.is_finished()))
             .collect()
     }
+
+    fn awake_sleeping_context(
+        &self,
+        project_type_args: &H256,
+        context: &mut JoinHandle<()>,
+        rpc_sender: &mut UnboundedSender<KoContextRpcEcho>,
+    ) {
+        let (ctx, rpc) = ContextImpl::new(
+            &self.rpc_client,
+            &self.private_key,
+            project_type_args,
+            &self.project_deps,
+            &self.driver_config,
+        );
+        *context = tokio::spawn(ctx.run());
+        *rpc_sender = rpc;
+    }
 }
 
 #[async_trait]
@@ -332,7 +353,7 @@ impl<C: CkbClient + 'static> ContextRpc for ContextMgr<C> {
     }
 
     async fn estimate_payment_ckb(
-        &self,
+        &mut self,
         project_type_args: &H256,
         sender: &Script,
         method_call: &str,
@@ -340,37 +361,38 @@ impl<C: CkbClient + 'static> ContextRpc for ContextMgr<C> {
         recipient: &Option<Script>,
         response: UnboundedSender<KoResult<u64>>,
     ) -> bool {
-        if let Some((ctx, rpc_sender)) = CONTEXT_POOL.lock().await.get(project_type_args) {
-            if !ctx.is_finished() {
-                let params = KoContextRpcEcho::EstimatePaymentCkb((
-                    (
-                        sender.clone(),
-                        method_call.into(),
-                        previous_json_data.into(),
-                        recipient.clone(),
-                    ),
-                    response,
-                ));
-                rpc_sender.send(params).unwrap();
-                return true;
+        if let Some((ctx, rpc_sender)) = CONTEXT_POOL.lock().await.get_mut(project_type_args) {
+            if ctx.is_finished() {
+                self.awake_sleeping_context(project_type_args, ctx, rpc_sender);
             }
+            let params = KoContextRpcEcho::EstimatePaymentCkb((
+                (
+                    sender.clone(),
+                    method_call.into(),
+                    previous_json_data.into(),
+                    recipient.clone(),
+                ),
+                response,
+            ));
+            rpc_sender.send(params).unwrap();
+            return true;
         }
         false
     }
 
     async fn listen_request_committed(
-        &self,
+        &mut self,
         project_type_args: &H256,
         request_hash: &H256,
         response: UnboundedSender<KoResult<H256>>,
     ) -> bool {
-        if let Some((ctx, rpc_sender)) = CONTEXT_POOL.lock().await.get(project_type_args) {
+        if let Some((ctx, rpc_sender)) = CONTEXT_POOL.lock().await.get_mut(project_type_args) {
             if ctx.is_finished() {
-                let params =
-                    KoContextRpcEcho::ListenRequestCommitted((request_hash.clone(), response));
-                rpc_sender.send(params).unwrap();
-                return true;
+                self.awake_sleeping_context(project_type_args, ctx, rpc_sender);
             }
+            let params = KoContextRpcEcho::ListenRequestCommitted((request_hash.clone(), response));
+            rpc_sender.send(params).unwrap();
+            return true;
         }
         false
     }

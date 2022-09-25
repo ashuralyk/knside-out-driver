@@ -5,7 +5,7 @@ project_manager_address = "ckt1qyq93wzur9h9l6qwyk6d4dvkuufp6gvl08aszz5syl"
 project_manager_privkey = "0x8d929e962f940f75aa32054f19a5ea2ce70ae30bfe4ff7cf2dbed70d556265df"
 
 # knside-out contract code_hash
-project_code_hash = "0x8680e03788eb830d44821e9e9cacfc3a30d38d48f2e439ab4e861d765454bd16"
+project_code_hash = "0x0a074cac9d16e339b7d726d4ec653b8ea38351461b6f0480a4d1c9e128b4c103"
 
 # url for connecting CKB node
 ckb_url = "http://127.0.0.1:8114/"
@@ -26,7 +26,7 @@ project_cell_deps = [
     # secp256k1
     { transaction_hash = "0xc6bffa9ca9a9dadfec83c0307eee18fe88e42a00d05068510d799e3e4ad3ee87", cell_index = 0, dep_type = 1 },
     # knside-out
-    { transaction_hash = "0x54c0774ffc8330216a8a8363f6b327c526d15be30830e55da3516c3913a5b413", cell_index = 0, dep_type = 0 },
+    { transaction_hash = "0x94d1eaa9e98536f76ba6cf8622e72578c50cba3f70db9ecf3275098955c3916c", cell_index = 0, dep_type = 0 },
 ]
 
 [drive_settings]
@@ -38,3 +38,6 @@ max_reqeusts_count = 20
 
 # the block confirmations count to checkout knside-out transaction status
 block_confirms_count = 3
+
+# the max idle duration of each knside-out context
+kickout_idle_sec = 360
