@@ -59,7 +59,7 @@ async fn call_contract_method() {
                 "ko_makeRequestTransactionDigest",
                 rpc_params!(
                     String::from(OWNER_ADDRESS),
-                    String::from("claim_nfts()"),
+                    String::from("withdraw(100)"),
                     Option::<String>::None,
                     Option::<OutPoint>::None,
                     PROJECT_TYPE_ARGS

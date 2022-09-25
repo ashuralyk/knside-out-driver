@@ -12,7 +12,7 @@ use ko_protocol::serde_json::to_string;
 use ko_protocol::tokio::sync::mpsc::unbounded_channel;
 use ko_protocol::traits::{Backend, CkbClient, ContextRpc};
 use ko_protocol::{
-    async_trait, hex, log, mol_flag_0, mol_flag_1, mol_flag_2, KoResult, ProjectDeps, H256,
+    async_trait, hex, mol_flag_0, mol_flag_1, mol_flag_2, KoResult, ProjectDeps, H256,
 };
 
 #[cfg(test)]
@@ -53,7 +53,6 @@ impl<C: CkbClient, R: ContextRpc> Backend for BackendImpl<C, R> {
         // prepare scripts
         let ckb_address =
             Address::from_str(&address).map_err(|_| BackendError::InvalidAddressFormat(address))?;
-        log::debug!("address = {}", ckb_address);
         let secp256k1_script: Script = ckb_address.payload().into();
         let manager_secp256k1_script: Script = project_deps.project_manager.payload().into();
 
@@ -62,7 +61,6 @@ impl<C: CkbClient, R: ContextRpc> Backend for BackendImpl<C, R> {
         let manager = hex::encode(&manager_secp256k1_script.calc_script_hash().raw_data());
         let (global_data_json, owner_as_driver, contract_bytecode) =
             helper::get_global_json_data(&contract, &owner, &manager)?;
-        log::debug!("global_data_json = {}", global_data_json);
 
         // build mock knside-out transaction outputs and data
         let driver_secp256k1_script = if owner_as_driver {
@@ -108,11 +106,6 @@ impl<C: CkbClient, R: ContextRpc> Backend for BackendImpl<C, R> {
         };
         let (inputs, inputs_capacity) =
             helper::fetch_live_cells(&self.rpc_client, search, 0, outputs_capacity).await?;
-        log::debug!(
-            "inputs_capacity = {}, outputs_capacity = {}",
-            inputs_capacity,
-            outputs_capacity
-        );
         if inputs_capacity < outputs_capacity {
             return Err(BackendError::InternalTransactionAssembleError.into());
         }
@@ -223,11 +216,6 @@ impl<C: CkbClient, R: ContextRpc> Backend for BackendImpl<C, R> {
         let (mut inputs, inputs_capacity) =
             helper::fetch_live_cells(&self.rpc_client, search, inputs_capacity, outputs_capacity)
                 .await?;
-        log::debug!(
-            "inputs_capacity = {}, outputs_capacity = {}",
-            inputs_capacity,
-            outputs_capacity
-        );
         if inputs_capacity < outputs_capacity {
             return Err(BackendError::InternalTransactionAssembleError.into());
         }

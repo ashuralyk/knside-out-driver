@@ -22,13 +22,13 @@ pub enum ExecutorError {
     #[display(fmt = "Invalid request lua code, code = {}, reason = {}", _0, _1)]
     ErrorLoadRequestLuaCode(String, String),
 
-    #[display(fmt = "koc.owner mismatch, {} != {}", _0, _1)]
+    #[display(fmt = "KOC.owner mismatch, {} != {}", _0, _1)]
     OwnerLockhashMismatch(String, String),
 
-    #[display(fmt = "koc.user mismatch")]
+    #[display(fmt = "KOC.user mismatch")]
     UnexpectedUserLockhash,
 
-    #[display(fmt = "koc.driver mismatch")]
+    #[display(fmt = "KOC.driver mismatch")]
     UnexpectedDriverLockhash,
 
     #[display(fmt = "Lua code execution error = {}", _0)]

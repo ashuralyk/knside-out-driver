@@ -109,7 +109,7 @@ async fn request_project_request_cell() {
     );
     let mut backend = BackendImpl::new(&rpc_client, MockContextRpc::default());
     let mut previous_cell = None;
-    let function_call = "battle_win()".into();
+    let function_call = "withdraw(600)".into();
     if function_call == "claim_nfts" {
         // search previous personal cell
         let personal_data = backend

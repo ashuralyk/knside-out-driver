@@ -135,6 +135,7 @@ impl<C: CkbClient> ContextImpl<C> {
         if receipt.requests.is_empty() {
             return Ok(None);
         }
+        let mut total_inputs_capacity = receipt.global_cell.capacity;
         let personal_outputs = self.executor.execute_lua_requests(
             &mut receipt.global_cell,
             &project_dep.contract_owner,
@@ -155,7 +156,6 @@ impl<C: CkbClient> ContextImpl<C> {
             .skip(1)
             .map(|input| (input.previous_output().tx_hash().unpack(), None))
             .collect::<Vec<(H256, _)>>();
-        let mut total_inputs_capacity = receipt.global_cell.capacity;
         personal_outputs
             .into_iter()
             .enumerate()
@@ -193,10 +193,13 @@ impl<C: CkbClient> ContextImpl<C> {
         let tx = self
             .assembler
             .complete_transaction_with_signature(tx, signature);
+        let next_global_cell = tx.output(0).unwrap().clone();
+        let next_global_data = tx.outputs_data().get(0).unwrap().clone();
         let hash = self.driver.send_transaction(tx).await?;
 
         // record last running context
-        self.project_context.global_cell = receipt.global_cell;
+        self.project_context.global_cell =
+            KoContextGlobalCell::from_output(next_global_cell, next_global_data.unpack());
 
         // wait transaction has been confirmed for enough confirmations
         self.driver
@@ -212,10 +215,18 @@ impl<C: CkbClient> ContextImpl<C> {
             .into_iter()
             .for_each(|(request_hash, error)| {
                 if let Some(callback) = self.listening_requests.remove(&request_hash) {
-                    if let Some(err) = error {
-                        callback.send(Err(err)).expect("clear callback");
-                    } else {
-                        callback.send(Ok(request_hash)).expect("clear callback");
+                    if let Err(err) = {
+                        if let Some(msg) = error {
+                            callback.send(Err(msg))
+                        } else {
+                            callback.send(Ok(request_hash))
+                        }
+                    } {
+                        log::error!(
+                            "[{}] request callback error: {}",
+                            self.assembler.get_project_args(),
+                            err
+                        );
                     }
                 }
             });

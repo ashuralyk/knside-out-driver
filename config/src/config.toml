@@ -5,7 +5,7 @@ project_manager_address = "ckt1qyq93wzur9h9l6qwyk6d4dvkuufp6gvl08aszz5syl"
 project_manager_privkey = "0x8d929e962f940f75aa32054f19a5ea2ce70ae30bfe4ff7cf2dbed70d556265df"
 
 # knside-out contract code_hash
-project_code_hash = "0x0a074cac9d16e339b7d726d4ec653b8ea38351461b6f0480a4d1c9e128b4c103"
+project_code_hash = "0xe7b5a4f6bbaf17c4f4afcc24805021c67bdd8db583097bcb38b21083ac2d1558"
 
 # url for connecting CKB node
 ckb_url = "http://127.0.0.1:8114/"
@@ -26,7 +26,7 @@ project_cell_deps = [
     # secp256k1
     { transaction_hash = "0xc6bffa9ca9a9dadfec83c0307eee18fe88e42a00d05068510d799e3e4ad3ee87", cell_index = 0, dep_type = 1 },
     # knside-out
-    { transaction_hash = "0x94d1eaa9e98536f76ba6cf8622e72578c50cba3f70db9ecf3275098955c3916c", cell_index = 0, dep_type = 0 },
+    { transaction_hash = "0x785e1680ae0f677b177954c41c297f50b711e0ddf0fc44c9cb92959cee6901cf", cell_index = 0, dep_type = 0 },
 ]
 
 [drive_settings]

@@ -1,5 +1,6 @@
 use ckb_sdk::traits::LiveCell;
-use ckb_types::{bytes::Bytes, core::Capacity, packed::Script, prelude::Unpack};
+use ckb_types::packed::{CellOutput, Script};
+use ckb_types::{bytes::Bytes, core::Capacity, prelude::Unpack};
 use derive_more::Constructor;
 use tokio::sync::mpsc::UnboundedSender;
 
@@ -17,12 +18,22 @@ pub enum KoContextRpcEcho {
     ListenRequestCommitted((H256, UnboundedSender<KoResult<H256>>)),
 }
 
-#[derive(Default, Constructor)]
+#[derive(Default, Constructor, Debug)]
 pub struct KoContextGlobalCell {
     pub lock_script: Script,
     pub output_data: Bytes,
     pub capacity: u64,
     pub occupied_capacity: u64,
+}
+
+impl KoContextGlobalCell {
+    pub fn from_output(cell: CellOutput, data: Bytes) -> Self {
+        let occupied = cell
+            .occupied_capacity(Capacity::bytes(data.len()).unwrap())
+            .unwrap()
+            .as_u64();
+        KoContextGlobalCell::new(cell.lock(), data, cell.capacity().unpack(), occupied)
+    }
 }
 
 impl From<LiveCell> for KoContextGlobalCell {
