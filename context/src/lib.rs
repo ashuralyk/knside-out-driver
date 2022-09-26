@@ -13,8 +13,8 @@ use ko_protocol::tokio::sync::Mutex;
 use ko_protocol::tokio::task::JoinHandle;
 use ko_protocol::traits::{Assembler, CkbClient, ContextRpc, Driver, Executor};
 use ko_protocol::types::assembler::{KoCellOutput, KoProject, KoRequest};
-use ko_protocol::types::config::KoDriveConfig;
 use ko_protocol::types::context::{KoContextGlobalCell, KoContextRpcEcho};
+use ko_protocol::types::{config::KoDriveConfig, error::ErrorType};
 use ko_protocol::{async_trait, lazy_static, log, tokio, KoResult, ProjectDeps, H256};
 
 #[cfg(test)]
@@ -65,9 +65,9 @@ impl<C: CkbClient> ContextImpl<C> {
     }
 
     async fn start_drive_loop(&mut self) -> KoResult<()> {
-        let project_dep = self.assembler.prepare_transaction_project_celldep().await?;
-        self.project_context.contract_code = project_dep.lua_code.clone();
-        self.project_context.project_owner = project_dep.contract_owner.clone();
+        let contract_dep = self.assembler.prepare_transaction_project_celldep().await?;
+        self.project_context.contract_code = contract_dep.lua_code.clone();
+        self.project_context.project_owner = contract_dep.contract_owner.clone();
         self.project_context.global_cell = self.assembler.get_project_global_cell().await?;
 
         log::info!(
@@ -80,7 +80,7 @@ impl<C: CkbClient> ContextImpl<C> {
         loop {
             tokio::select! {
                 _ = tokio::time::sleep(self.drive_interval) => {
-                    if let Some(hash) = self.drive(&project_dep).await? {
+                    if let Some(hash) = self.drive(&contract_dep).await? {
                         log::info!(
                             "[{}] transaction #{} confirmed",
                             self.assembler.get_project_args(),
@@ -268,6 +268,9 @@ impl<C: CkbClient> ContextImpl<C> {
     pub async fn run(mut self) {
         while let Err(error) = self.start_drive_loop().await {
             log::error!("[{}] {}", self.assembler.get_project_args(), error);
+            if let ErrorType::Assembler = error.error_type {
+                break;
+            }
             tokio::time::sleep(self.drive_interval).await;
         }
     }

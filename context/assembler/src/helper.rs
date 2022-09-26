@@ -1,5 +1,5 @@
 use ko_protocol::ckb_sdk::constants::TYPE_ID_CODE_HASH;
-use ko_protocol::ckb_sdk::rpc::ckb_indexer::{ScriptType, SearchKey};
+use ko_protocol::ckb_sdk::rpc::ckb_indexer::{ScriptType, SearchKey, SearchKeyFilter};
 use ko_protocol::ckb_sdk::traits::LiveCell;
 use ko_protocol::ckb_types::bytes::Bytes;
 use ko_protocol::ckb_types::core::{Capacity, ScriptHashType, TransactionView};
@@ -39,17 +39,27 @@ pub async fn search_global_cell(
     rpc: &impl CkbClient,
     code_hash: &H256,
     project_id: &H256,
+    driver: Option<&Script>,
 ) -> KoResult<LiveCell> {
     let global_typescript = Script::new_builder()
         .code_hash(code_hash.pack())
         .hash_type(ScriptHashType::Data.into())
         .args(mol_flag_0(project_id.as_bytes32()).as_slice().pack())
         .build();
-    let search_key = SearchKey {
+    let mut search_key = SearchKey {
         script: global_typescript.into(),
         script_type: ScriptType::Type,
         filter: None,
     };
+    if let Some(driver) = driver {
+        let filter = SearchKeyFilter {
+            script: Some(driver.clone().into()),
+            output_data_len_range: None,
+            output_capacity_range: None,
+            block_range: None,
+        };
+        search_key.filter = Some(filter);
+    }
     let result = rpc
         .fetch_live_cells(search_key, 1, None)
         .await

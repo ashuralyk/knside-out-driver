@@ -23,6 +23,7 @@ pub struct AssemblerImpl<C: CkbClient> {
     project_id_args: H256,
     project_code_hash: H256,
     project_cell_deps: Vec<CellDep>,
+    project_manager: Script,
 }
 
 impl<C: CkbClient> AssemblerImpl<C> {
@@ -44,6 +45,7 @@ impl<C: CkbClient> AssemblerImpl<C> {
             rpc_client: rpc_client.clone(),
             project_code_hash: project_deps.project_code_hash.clone(),
             project_cell_deps: project_deps.project_cell_deps.clone(),
+            project_manager: project_deps.project_manager.payload().into(),
         }
     }
 
@@ -56,9 +58,13 @@ impl<C: CkbClient> AssemblerImpl<C> {
     }
 
     pub async fn get_project_global_cell(&self) -> KoResult<KoContextGlobalCell> {
-        let global_cell =
-            helper::search_global_cell(&self.rpc_client, &self.project_code_hash, &self.project_id)
-                .await?;
+        let global_cell = helper::search_global_cell(
+            &self.rpc_client,
+            &self.project_code_hash,
+            &self.project_id,
+            Some(&self.project_manager),
+        )
+        .await?;
         Ok(global_cell.into())
     }
 }
@@ -85,9 +91,13 @@ impl<C: CkbClient> Assembler for AssemblerImpl<C> {
         extra_cell_dep: &CellDep,
     ) -> KoResult<(TransactionView, KoAssembleReceipt)> {
         // find project global cell
-        let global_cell =
-            helper::search_global_cell(&self.rpc_client, &self.project_code_hash, &self.project_id)
-                .await?;
+        let global_cell = helper::search_global_cell(
+            &self.rpc_client,
+            &self.project_code_hash,
+            &self.project_id,
+            Some(&self.project_manager),
+        )
+        .await?;
         let cell_deps = {
             let mut cell_deps = self.project_cell_deps.clone();
             cell_deps.push(extra_cell_dep.clone());

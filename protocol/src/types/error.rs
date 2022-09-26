@@ -14,9 +14,9 @@ pub enum ErrorType {
 }
 
 #[derive(Debug, Constructor, Display)]
-#[display(fmt = "Type: {:?}, Message: {:?}", error_type, message)]
+#[display(fmt = "Type: {:?}, Message: {}", error_type, message)]
 pub struct KoError {
-    error_type: ErrorType,
+    pub error_type: ErrorType,
     message: Box<dyn Error + Send>,
 }
 
