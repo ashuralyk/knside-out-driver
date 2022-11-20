@@ -12,6 +12,97 @@ use mlua::{Lua, LuaSerdeExt, Table, Value};
 use crate::error::ExecutorError;
 use crate::luac;
 
+fn koc_fill_candidates(context: &Table, candidates: &[Script]) -> KoResult<()> {
+    let candidates = candidates
+        .iter()
+        .map(|v| hex::encode(v.calc_script_hash().raw_data()))
+        .collect::<Vec<_>>();
+    luac!(context.set("candidates", candidates));
+    Ok(())
+}
+
+fn koc_fill_inputs(lua: &Lua, context: &Table, inputs: &[(Script, Bytes)]) -> KoResult<()> {
+    let inputs = inputs
+        .iter()
+        .map(|(script, data)| {
+            let input = luac!(lua.create_table());
+            let owner = hex::encode(script.calc_script_hash().raw_data());
+            luac!(input.set("owner", owner));
+            if !data.is_empty() {
+                let value: serde_json::Value = serde_json::from_slice(data)
+                    .map_err(|_| ExecutorError::InvalidJsonFormatForPersonalData)?;
+                let data = luac!(lua.to_value(&value));
+                luac!(input.set("data", data));
+            }
+            Ok(input)
+        })
+        .collect::<KoResult<Vec<_>>>()?;
+    luac!(context.set("inputs", inputs));
+    Ok(())
+}
+
+fn koc_fill_components(lua: &Lua, context: &Table, components: &[Bytes]) -> KoResult<()> {
+    let components = components
+        .iter()
+        .map(|data| {
+            let value: serde_json::Value = serde_json::from_slice(data)
+                .map_err(|_| ExecutorError::InvalidJsonFormatForCelldepData)?;
+            Ok(luac!(lua.to_value(&value)))
+        })
+        .collect::<KoResult<Vec<_>>>()?;
+    luac!(context.set("components", components));
+    Ok(())
+}
+
+fn koc_extract_outputs(
+    context: &Table,
+    method_call: &Bytes,
+) -> KoResult<Vec<(String, Option<Bytes>)>> {
+    let outputs: mlua::Table = luac!(context.get("outputs"));
+    let outputs = outputs
+        .sequence_values::<mlua::Table>()
+        .map(|table| {
+            let table = luac!(table);
+            let output_owner = {
+                let owner: mlua::String = luac!(table.get("owner"));
+                luac!(owner.to_str()).into()
+            };
+            let output_data = {
+                let value: Value = luac!(table.get("data"));
+                match value {
+                    Value::Nil => None,
+                    Value::Table(data) => {
+                        let data = serde_json::to_string(&data).unwrap();
+                        Some(Bytes::from(data.as_bytes().to_vec()))
+                    }
+                    _ => Err(ExecutorError::ErrorLoadRequestLuaCode(
+                        String::from_utf8(method_call.to_vec()).unwrap(),
+                        "the output_data can only be nil or table".into(),
+                    ))?,
+                }
+            };
+            Ok((output_owner, output_data))
+        })
+        .collect::<KoResult<Vec<_>>>()?;
+    Ok(outputs)
+}
+
+fn get_avaliable_users<'a>(
+    inputs: &'a [(Script, Bytes)],
+    candidates: &'a [Script],
+) -> HashMap<String, &'a Script> {
+    let mut users = HashMap::new();
+    inputs.iter().for_each(|(script, _)| {
+        let key = hex::encode(script.calc_script_hash().raw_data());
+        users.insert(key, script);
+    });
+    candidates.iter().for_each(|script| {
+        let key = hex::encode(script.calc_script_hash().raw_data());
+        users.insert(key, script);
+    });
+    users
+}
+
 pub fn run_request(
     lua: &Lua,
     owner: &Script,
@@ -21,22 +112,9 @@ pub fn run_request(
 ) -> KoResult<KoCellOutput> {
     // prepare personal context injections
     let context: Table = luac!(lua.globals().get("KOC"));
-    let request_owner = request.lock_script.calc_script_hash();
-    luac!(context.set("user", hex::encode(request_owner.raw_data())));
-    if let Some(script) = &request.recipient_script {
-        let recipient_lockhash = script.calc_script_hash();
-        luac!(context.set("recipient", hex::encode(recipient_lockhash.raw_data())));
-    } else {
-        luac!(context.set("recipient", mlua::Nil));
-    }
-    if !request.json_data.is_empty() {
-        let value: serde_json::Value = serde_json::from_slice(&request.json_data)
-            .map_err(|_| ExecutorError::InvalidJsonFormatForPersonalData)?;
-        let personal_table = luac!(lua.to_value(&value));
-        luac!(context.set("personal", personal_table));
-    } else {
-        luac!(context.set("personal", mlua::Nil));
-    }
+    koc_fill_candidates(&context, &request.candidates)?;
+    koc_fill_inputs(lua, &context, &request.inputs)?;
+    koc_fill_components(lua, &context, &request.components)?;
     luac!(lua.globals().set("KOC", context));
     luac!(lua.globals().set("i", offset));
 
@@ -59,63 +137,37 @@ pub fn run_request(
         return Err(ExecutorError::OwnerLockhashMismatch(koc_owner, expect_owner).into());
     }
 
-    // check specified user lock_hash
-    let user_lockhash: mlua::String = luac!(context.get("user"));
-    let koc_user: String = luac!(user_lockhash.to_str()).into();
-    let expect_user = hex::encode(&request.lock_script.calc_script_hash().raw_data());
-    let expect_recipient = if let Some(script) = &request.recipient_script {
-        hex::encode(&script.calc_script_hash().raw_data())
-    } else {
-        String::new()
-    };
-    let user_lockscript = {
-        if koc_user == expect_user {
-            request.lock_script.clone()
-        } else if request.recipient_script.is_some() && koc_user == expect_recipient {
-            request.recipient_script.as_ref().unwrap().clone()
-        } else {
-            return Err(ExecutorError::UnexpectedUserLockhash.into());
-        }
-    };
-
-    // make sure global is a table value
+    // ure global is a table value
     let _global: Table = luac!(context.get("global"));
 
     // check specified driver lock_hash
+    let expect_users = get_avaliable_users(&request.inputs, &request.candidates);
     let driver_lockhash: mlua::String = luac!(context.get("driver"));
     let koc_driver: String = luac!(driver_lockhash.to_str()).into();
     let expect_driver = hex::encode(global_driver.calc_script_hash().raw_data());
     if koc_driver != expect_driver {
-        *global_driver = {
-            if koc_driver == expect_owner {
-                owner.clone()
-            } else if koc_driver == expect_user {
-                request.lock_script.clone()
-            } else if request.recipient_script.is_some() && koc_driver == expect_recipient {
-                request.recipient_script.as_ref().unwrap().clone()
-            } else {
-                return Err(ExecutorError::UnexpectedDriverLockhash.into());
-            }
-        };
+        *global_driver = if let Some(driver) = expect_users.get(&koc_driver) {
+            (*driver).clone()
+        } else {
+            return Err(ExecutorError::UnexpectedDriverLockhash.into());
+        }
     }
 
-    // generate cell_output data
-    let output_data: Value = luac!(context.get("personal"));
-    let json_data = match output_data {
-        Value::Nil => None,
-        Value::Table(data) => {
-            let data = serde_json::to_string(&data).unwrap();
-            Some(Bytes::from(data.as_bytes().to_vec()))
-        }
-        _ => Err(ExecutorError::ErrorLoadRequestLuaCode(
-            String::from_utf8(request.function_call.to_vec()).unwrap(),
-            "the return value can only be nil or table".into(),
-        ))?,
-    };
+    // check specified user ouputs
+    let outputs = koc_extract_outputs(&context, &request.function_call)?
+        .iter()
+        .map(|(owner, data)| {
+            if let Some(script) = expect_users.get(owner) {
+                Ok(((*script).clone(), data.clone()))
+            } else {
+                Err(ExecutorError::UnexpectedUserOutputLockhash.into())
+            }
+        })
+        .collect::<KoResult<Vec<_>>>()?;
 
     // make occupied request cell capacity assign to output_cell's basic capacity
     let basic_ckb = request.capacity - request.payment_ckb;
-    Ok(KoCellOutput::new(json_data, user_lockscript, basic_ckb))
+    Ok(KoCellOutput::new(outputs, basic_ckb))
 }
 
 pub fn parse_requests_to_outputs(

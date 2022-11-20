@@ -4,8 +4,13 @@ use ko_protocol::H256;
 
 #[derive(Display, Debug)]
 pub enum AssemblerError {
-    #[display(fmt = "{}", _0)]
+    #[display(fmt = "Bad indexer rpc call, error = {}", _0)]
     IndexerRpcError(String),
+
+    #[display(fmt = "Bad ckb rpc call, error = {}", _0)]
+    CkbRpcError(String),
+
+    InvalidFunctionCelldep,
 
     #[display(fmt = "Project cell not found, project_id_args = {}", _0)]
     MissProjectDeploymentCell(H256),

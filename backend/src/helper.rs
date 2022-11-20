@@ -1,14 +1,17 @@
 use std::str::FromStr;
 
+use ckb_hash::blake2b_256;
 use ko_protocol::ckb_sdk::constants::TYPE_ID_CODE_HASH;
-use ko_protocol::ckb_sdk::rpc::ckb_indexer::SearchKey;
+use ko_protocol::ckb_sdk::rpc::ckb_indexer::{ScriptType, SearchKey};
 use ko_protocol::ckb_sdk::HumanCapacity;
 use ko_protocol::ckb_types::bytes::Bytes;
 use ko_protocol::ckb_types::core::{ScriptHashType, TransactionView};
-use ko_protocol::ckb_types::packed::{CellInput, CellOutput, Script, ScriptOpt, WitnessArgs};
+use ko_protocol::ckb_types::packed::{
+    CellInput, CellOutput, OutPoint, Script, ScriptOpt, Transaction, WitnessArgs,
+};
 use ko_protocol::ckb_types::prelude::{Builder, Entity, Pack, Unpack};
-use ko_protocol::serde_json;
-use ko_protocol::{mol_flag_0, traits::CkbClient, KoResult, H256};
+use ko_protocol::{mol_identity, traits::CkbClient, KoResult, H256};
+use ko_protocol::{mol_request, serde_json};
 
 use crate::BackendError;
 
@@ -31,7 +34,7 @@ pub fn build_global_type_script(project_code_hash: &H256, project_type_args: &H2
     Script::new_builder()
         .code_hash(project_code_hash.pack())
         .hash_type(ScriptHashType::Data.into())
-        .args(mol_flag_0(project_id.as_bytes32()).as_slice().pack())
+        .args(mol_identity(0, project_id.as_bytes32()).as_slice().pack())
         .build()
 }
 
@@ -94,6 +97,47 @@ pub async fn fetch_live_cells(
         after = Some(result.last_cursor);
     }
     Ok((inputs, inputs_capacity))
+}
+
+pub async fn fetch_cell_by_script(
+    rpc: &impl CkbClient,
+    lock_script: &Script,
+) -> KoResult<(CellInput, u64)> {
+    let search = SearchKey {
+        script: lock_script.clone().into(),
+        script_type: ScriptType::Lock,
+        filter: None,
+    };
+    let (cells, ckb) = fetch_live_cells(rpc, search, 0, 0).await?;
+    if cells.is_empty() {
+        return Err(BackendError::MissInputCell.into());
+    }
+    Ok((cells[0].clone(), ckb))
+}
+
+pub async fn fetch_outpoint_cell(
+    rpc: &impl CkbClient,
+    out_point: &OutPoint,
+) -> KoResult<(CellOutput, String, [u8; 32])> {
+    let tx: Transaction = rpc
+        .get_transaction(&out_point.tx_hash().unpack())
+        .await
+        .map_err(|err| BackendError::CkbRpcError(err.to_string()))?
+        .unwrap()
+        .transaction
+        .unwrap()
+        .inner
+        .into();
+    let tx = tx.into_view();
+    let index: u32 = out_point.index().unpack();
+    let cell = tx.output_with_data(index as usize);
+    if let Some((cell, data)) = cell {
+        let data_hash = blake2b_256(&data);
+        let data = String::from_utf8(data.to_vec()).map_err(|_| BackendError::InvalidCell)?;
+        Ok((cell, data, data_hash))
+    } else {
+        Err(BackendError::InvalidCell.into())
+    }
 }
 
 pub fn get_transaction_digest(tx: &TransactionView) -> H256 {
@@ -197,4 +241,40 @@ pub fn complete_transaction_with_signature(
     tx.as_advanced_builder()
         .witnesses(vec![witness].pack())
         .build()
+}
+
+pub fn make_request_data(
+    method: &str,
+    cells: &[(Script, String)],
+    cell_deps: &[(&OutPoint, [u8; 32])],
+    floatings: &[Script],
+) -> Vec<u8> {
+    let cells = cells
+        .iter()
+        .map(|(lock, data)| {
+            let data = if data.is_empty() {
+                None
+            } else {
+                Some(data.as_bytes())
+            };
+            (lock.as_slice(), data)
+        })
+        .collect::<Vec<_>>();
+    let cell_deps = cell_deps
+        .iter()
+        .map(|(out_point, data_hash)| {
+            let hash: H256 = out_point.tx_hash().unpack();
+            let index: u32 = out_point.index().unpack();
+            (hash, index, data_hash)
+        })
+        .collect::<Vec<_>>();
+    let cell_deps = cell_deps
+        .iter()
+        .map(|(hash, index, data_hash)| (hash.as_bytes32(), *index as u8, *data_hash))
+        .collect::<Vec<_>>();
+    let floatings = floatings
+        .iter()
+        .map(|lock| lock.as_slice())
+        .collect::<Vec<_>>();
+    mol_request(method, &cells, &cell_deps, &floatings)
 }

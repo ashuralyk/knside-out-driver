@@ -6,10 +6,10 @@ use super::context::KoContextGlobalCell;
 
 #[derive(Constructor)]
 pub struct KoRequest {
-    pub json_data: Bytes,
     pub function_call: Bytes,
-    pub lock_script: Script,
-    pub recipient_script: Option<Script>,
+    pub inputs: Vec<(Script, Bytes)>,
+    pub candidates: Vec<Script>,
+    pub components: Vec<Bytes>,
     pub payment_ckb: u64,
     pub capacity: u64,
 }
@@ -50,7 +50,6 @@ impl KoAssembleReceipt {
 
 #[derive(Constructor)]
 pub struct KoCellOutput {
-    pub data: Option<Bytes>,
-    pub lock_script: Script,
+    pub cells: Vec<(Script, Option<Bytes>)>,
     pub capacity: u64,
 }

@@ -71,7 +71,7 @@ impl TryFrom<Bytes> for H256 {
 
 impl Display for H256 {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{}", hex::encode(&self))
+        write!(f, "{}", hex::encode(self))
     }
 }
 

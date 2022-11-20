@@ -99,13 +99,13 @@ impl<C: CkbClient> ContextImpl<C> {
 
                 Some(echo) = self.rpc_receiver.recv() => match echo {
                     KoContextRpcEcho::EstimatePaymentCkb(
-                        ((sender, method_call, previous_json_data, recipient), response)
+                        ((inputs, method_call, candidates, components), response)
                     ) => {
                         let payment_ckb = self.estimate_payment_ckb(
-                            &sender,
                             &method_call,
-                            &previous_json_data,
-                            &recipient
+                            &inputs,
+                            &candidates,
+                            &components
                         );
                         response.send(payment_ckb).expect("EstimatePaymentCkb channel");
                     },
@@ -144,8 +144,10 @@ impl<C: CkbClient> ContextImpl<C> {
             &receipt.random_seeds,
         )?;
         let mut cell_outputs = vec![KoCellOutput::new(
-            Some(receipt.global_cell.output_data.clone()),
-            receipt.global_cell.lock_script.clone(),
+            vec![(
+                receipt.global_cell.lock_script.clone(),
+                Some(receipt.global_cell.output_data.clone()),
+            )],
             receipt.global_cell.capacity,
         )];
 
@@ -167,18 +169,18 @@ impl<C: CkbClient> ContextImpl<C> {
                 Err(err) => {
                     // recover the previous cell before its request operation
                     let request = &receipt.requests[i];
-                    let data = {
-                        if request.json_data.is_empty() {
-                            None
-                        } else {
-                            Some(request.json_data.clone())
-                        }
-                    };
-                    cell_outputs.push(KoCellOutput::new(
-                        data,
-                        request.lock_script.clone(),
-                        request.capacity,
-                    ));
+                    let cells = request
+                        .inputs
+                        .iter()
+                        .map(|(script, data)| {
+                            if data.is_empty() {
+                                (script.clone(), None)
+                            } else {
+                                (script.clone(), Some(data.clone()))
+                            }
+                        })
+                        .collect::<Vec<_>>();
+                    cell_outputs.push(KoCellOutput::new(cells, request.capacity));
                     total_inputs_capacity += receipt.requests[i].capacity;
                     request_hashes[i].1 = Some(err);
                 }
@@ -236,16 +238,16 @@ impl<C: CkbClient> ContextImpl<C> {
 
     pub fn estimate_payment_ckb(
         &self,
-        sender: &Script,
         method_call: &str,
-        previous_json_data: &str,
-        recipient: &Option<Script>,
+        inputs: &[(Script, Bytes)],
+        candidates: &[Script],
+        components: &[Bytes],
     ) -> KoResult<u64> {
         let request = KoRequest::new(
-            Bytes::from(previous_json_data.as_bytes().to_vec()),
             Bytes::from(method_call.as_bytes().to_vec()),
-            sender.clone(),
-            recipient.clone(),
+            inputs.to_owned(),
+            candidates.to_owned(),
+            components.to_owned(),
             0,
             0,
         );
@@ -369,23 +371,26 @@ impl<C: CkbClient + 'static> ContextRpc for ContextMgr<C> {
     async fn estimate_payment_ckb(
         &mut self,
         project_type_args: &H256,
-        sender: &Script,
         method_call: &str,
-        previous_json_data: &str,
-        recipient: &Option<Script>,
+        inputs: &[(Script, String)],
+        candidates: &[Script],
+        components: &[String],
         response: UnboundedSender<KoResult<u64>>,
     ) -> bool {
         if let Some((ctx, rpc_sender)) = CONTEXT_POOL.lock().await.get_mut(project_type_args) {
             if ctx.is_finished() {
                 self.awake_sleeping_context(project_type_args, ctx, rpc_sender);
             }
+            let inputs = inputs
+                .iter()
+                .map(|(s, d)| (s.clone(), Bytes::from(d.as_bytes().to_vec())))
+                .collect();
+            let components = components
+                .iter()
+                .map(|s| Bytes::from(s.as_bytes().to_vec()))
+                .collect();
             let params = KoContextRpcEcho::EstimatePaymentCkb((
-                (
-                    sender.clone(),
-                    method_call.into(),
-                    previous_json_data.into(),
-                    recipient.clone(),
-                ),
+                (inputs, method_call.into(), candidates.into(), components),
                 response,
             ));
             rpc_sender.send(params).unwrap();

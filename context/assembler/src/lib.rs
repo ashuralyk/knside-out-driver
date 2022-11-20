@@ -5,7 +5,7 @@ use ko_protocol::ckb_sdk::constants::TYPE_ID_CODE_HASH;
 use ko_protocol::ckb_sdk::rpc::ckb_indexer::{ScriptType, SearchKey};
 use ko_protocol::ckb_types::bytes::Bytes;
 use ko_protocol::ckb_types::core::{Capacity, DepType, ScriptHashType, TransactionView};
-use ko_protocol::ckb_types::packed::{CellDep, CellInput, CellOutput, Script, WitnessArgs};
+use ko_protocol::ckb_types::packed::{CellDep, CellInput, Script, WitnessArgs};
 use ko_protocol::ckb_types::prelude::{Builder, Entity, Pack, Unpack};
 use ko_protocol::traits::{Assembler, CkbClient};
 use ko_protocol::types::assembler::{KoAssembleReceipt, KoCellOutput, KoProject, KoRequest};
@@ -129,53 +129,40 @@ impl<C: CkbClient> Assembler for AssemblerImpl<C> {
                 .fetch_live_cells(search_key.clone(), 30, after)
                 .await
                 .map_err(|_| AssemblerError::MissProjectRequestCell)?;
-            result
-                .objects
-                .into_iter()
-                .try_for_each::<_, KoResult<_>>(|cell| {
-                    let output = cell.output.into();
-                    if !helper::check_valid_request(&output, &self.project_code_hash) {
-                        // println!("[WARN] find invalid reqeust format");
-                        return Ok(());
-                    }
-                    let flag_2 = ko_protocol::mol_flag_2_raw(&output.lock().args().raw_data())
-                        .expect("flag_2 molecule");
-                    let caller_lockscript =
-                        Script::from_slice(&flag_2.caller_lockscript().raw_data())
-                            .map_err(|_| AssemblerError::UnsupportedCallerScriptFormat)?;
-                    let recipient_lockscript = {
-                        let script = flag_2.recipient_lockscript().to_opt();
-                        if let Some(inner) = script {
-                            let script = Script::from_slice(&inner.raw_data())
-                                .map_err(|_| AssemblerError::UnsupportedRecipientScriptFormat)?;
-                            Some(script)
-                        } else {
-                            None
-                        }
-                    };
-                    let payment_ckb = {
-                        let capacity: u64 = output.capacity().unpack();
-                        let exact_capacity = output
-                            .occupied_capacity(Capacity::bytes(cell.output_data.len()).unwrap())
-                            .unwrap()
-                            .as_u64();
-                        capacity - exact_capacity
-                    };
-                    requests.push(KoRequest::new(
-                        cell.output_data.into_bytes(),
-                        flag_2.function_call().raw_data(),
-                        caller_lockscript,
-                        recipient_lockscript,
-                        payment_ckb,
-                        output.capacity().unpack(),
-                    ));
-                    let input = CellInput::new_builder()
-                        .previous_output(cell.out_point.into())
-                        .build();
-                    blake2b.update(input.as_slice());
-                    tx = tx.as_advanced_builder().input(input).build();
-                    Ok(())
-                })?;
+            for cell in result.objects.into_iter() {
+                let output = cell.output.into();
+                let output_data = cell.output_data.as_bytes();
+                if !helper::check_valid_request(&output, output_data, &self.project_code_hash) {
+                    // println!("[WARN] find invalid reqeust format");
+                    continue;
+                }
+                let request = ko_protocol::parse_mol_request(output_data);
+                let inputs = helper::extract_inputs_from_request(&request)?;
+                let candidates = helper::extract_candidates_from_request(&request)?;
+                let components =
+                    helper::extract_components_from_request(&self.rpc_client, &request).await?;
+                let payment_ckb = {
+                    let capacity: u64 = output.capacity().unpack();
+                    let exact_capacity = output
+                        .occupied_capacity(Capacity::bytes(cell.output_data.len()).unwrap())
+                        .unwrap()
+                        .as_u64();
+                    capacity - exact_capacity
+                };
+                requests.push(KoRequest::new(
+                    cell.output_data.into_bytes(),
+                    inputs,
+                    candidates,
+                    components,
+                    payment_ckb,
+                    output.capacity().unpack(),
+                ));
+                let input = CellInput::new_builder()
+                    .previous_output(cell.out_point.into())
+                    .build();
+                blake2b.update(input.as_slice());
+                tx = tx.as_advanced_builder().input(input).build();
+            }
             if result.last_cursor.is_empty() {
                 break;
             }
@@ -201,38 +188,11 @@ impl<C: CkbClient> Assembler for AssemblerImpl<C> {
         let mut outputs_capacity = fee;
         let mut outputs_data = vec![];
         cell_outputs.iter().enumerate().for_each(|(i, output)| {
-            let mut cell_output = CellOutput::new_builder()
-                .lock(output.lock_script.clone())
-                .build_exact_capacity(Capacity::zero())
-                .unwrap();
-            let mut cell_output_data = Bytes::new();
-
-            // handle cell which will contain personal json data
-            if let Some(data) = &output.data {
-                let type_ = if i == 0 {
-                    helper::make_global_script(&self.project_code_hash, &self.project_id)
-                } else {
-                    helper::make_personal_script(&self.project_code_hash, &self.project_id)
-                };
-                cell_output = cell_output
-                    .as_builder()
-                    .type_(Some(type_).pack())
-                    .build_exact_capacity(Capacity::bytes(data.len()).unwrap())
-                    .unwrap();
-                cell_output_data = data.clone();
-            }
-
-            // handle cell in which the capacity needs to use the one from request
-            if output.capacity > cell_output.capacity().unpack() {
-                cell_output = cell_output
-                    .as_builder()
-                    .capacity(Capacity::shannons(output.capacity).pack())
-                    .build();
-            }
-            let capacity: u64 = cell_output.capacity().unpack();
+            let (mut cells, mut data, capacity) =
+                helper::process_raw_outputs(i, output, &self.project_code_hash, &self.project_id);
             outputs_capacity += capacity;
-            outputs.push(cell_output);
-            outputs_data.push(cell_output_data);
+            outputs.append(&mut cells);
+            outputs_data.append(&mut data);
         });
 
         // check inputs/outputs capacity

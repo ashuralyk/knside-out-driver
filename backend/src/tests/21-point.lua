@@ -12,24 +12,28 @@ function construct ()
 end
 
 function change_driver()
-    assert(KOC.owner == KOC.user, "only allow project owner")
-    KOC.driver = KOC.recipient
+    assert(KOC.owner == KOC.inputs[1].owner, "only owner")
+    assert(KOC.candidates[1], "non-empty candidates")
+    return {
+        driver = KOC.candidates[1]
+    }
 end
 
 function deposit(quantity)
-    assert(KOC.owner == KOC.user, "only allow project owner")
-    assert(KOC.ckb_deposit(quantity))
+    assert(KOC.owner == KOC.inputs[1].owner, "only owner")
+    assert(KOC.ckb_deposit(quantity), "deposit: sufficient ckbytes")
 end
 
 function withdraw(quantity)
-    assert(KOC.owner == KOC.user, "only allow project owner")
-    assert(KOC.ckb_withdraw(quantity), "global ckb not enough to withdraw")
+    assert(KOC.owner == KOC.inputs[1].owner, "only owner")
+    assert(KOC.ckb_withdraw(quantity), "withdraw: sufficient ckbytes")
 end
 
 function battle_win()
-    assert(KOC.ckb_deposit(200), "claim_nft() ckb not enough")
-    local sender = KOC.user
+    assert(KOC.ckb_deposit(200), "deposit: sufficient ckbytes of 200")
+    local sender = KOC.inputs[1].owner
     local global = KOC.global
+
     global.battle_count = global.battle_count + 1
     local value = global.personals[sender] or {
         win_count = 0,
@@ -40,11 +44,16 @@ function battle_win()
     table.insert(value.nfts, global.nft_token_id)
     global.nft_token_id = global.nft_token_id + 1
     global.personals[sender] = value
+
+    return {
+        global = global
+    }
 end
 
 function battle_lose()
-    local sender = KOC.user
+    local sender = KOC.inputs[1].owner
     local global = KOC.global
+
     global.battle_count = global.battle_count + 1
     local value = global.personals[sender] or {
         win_count = 0,
@@ -53,21 +62,30 @@ function battle_lose()
     }
     value.lose_count = value.lose_count + 1
     global.personals[sender] = value
+
+    return {
+        global = global
+    }
 end
 
 function claim_nfts()
-    assert(KOC.ckb_deposit(200), "claim_nft() ckb not enough")
-    local personal = assert(KOC.global.personals[KOC.user], 'no user')
+    assert(KOC.ckb_deposit(200), "deposit: sufficient ckbytes of 200")
+    local sender = KOC.inputs[1].owner
+    local global = KOC.global
+    local personal = assert(global.personals[sender], 'no sender')
     local nfts = personal.nfts or {}
-    assert(#nfts > 0, "no nfts")
     personal.nfts = {}
-    local data = KOC.personal or {}
-    if #data > 0 then
-        for _, nft_id in ipairs(nfts) do
-            table.insert(data, nft_id)
-        end
-    else
-        data = nfts
+    assert(#nfts > 0, "empty nfts")
+
+    local data = KOC.inputs[1].data or {}
+    for _, nft_id in ipairs(nfts) do
+        table.insert(data, nft_id)
     end
-    KOC.personal = data
+    
+    return {
+        global = global,
+        outputs = {
+            { owner = sender, data = data }
+        }
+    }
 end

@@ -10,10 +10,10 @@ pub trait ContextRpc: Send + Sync {
     async fn estimate_payment_ckb(
         &mut self,
         project_type_args: &H256,
-        sender: &Script,
         method_call: &str,
-        previous_json_data: &str,
-        recipient: &Option<Script>,
+        inputs: &[(Script, String)],
+        candidates: &[Script],
+        components: &[String],
         response: UnboundedSender<KoResult<u64>>,
     ) -> bool;
 

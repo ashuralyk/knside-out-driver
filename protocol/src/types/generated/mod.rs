@@ -3,7 +3,6 @@
 #[allow(clippy::all)]
 pub mod generated;
 
-use molecule::bytes::Bytes;
 use molecule::prelude::{Builder, Byte, Entity, Reader};
 
 fn mol_hash(v: &[u8; 32]) -> generated::Hash {
@@ -23,9 +22,9 @@ fn mol_string(v: &[u8]) -> generated::String {
     generated::String::new_builder().set(bytes).build()
 }
 
-fn mol_string_opt(v: Option<Bytes>) -> generated::StringOpt {
+fn mol_string_opt(v: Option<&[u8]>) -> generated::StringOpt {
     if let Some(v) = v {
-        let string = mol_string(&v);
+        let string = mol_string(v);
         generated::StringOpt::new_builder()
             .set(Some(string))
             .build()
@@ -34,87 +33,81 @@ fn mol_string_opt(v: Option<Bytes>) -> generated::StringOpt {
     }
 }
 
-pub fn mol_flag_0(hash: &[u8; 32]) -> Vec<u8> {
-    let mut flag_0_bytes = generated::Flag0::new_builder()
+fn mol_string_vec(v: &[&[u8]]) -> generated::StringVec {
+    let strings = v.iter().map(|bytes| mol_string(bytes)).collect::<Vec<_>>();
+    generated::StringVec::new_builder().set(strings).build()
+}
+
+fn mol_cell(lockscript: &[u8], data: Option<&[u8]>) -> generated::Cell {
+    generated::Cell::new_builder()
+        .owner_lockscript(mol_string(lockscript))
+        .data(mol_string_opt(data))
+        .build()
+}
+
+fn mol_cell_vec(v: &[(&[u8], Option<&[u8]>)]) -> generated::CellVec {
+    let cells = v
+        .iter()
+        .map(|(lock, data)| mol_cell(lock, *data))
+        .collect::<Vec<_>>();
+    generated::CellVec::new_builder().set(cells).build()
+}
+
+fn mol_celldep(tx_hash: &[u8; 32], index: u8, data_hash: &[u8; 32]) -> generated::Celldep {
+    generated::Celldep::new_builder()
+        .tx_hash(mol_hash(tx_hash))
+        .index(index.into())
+        .data_hash(mol_hash(data_hash))
+        .build()
+}
+
+fn mol_celldep_vec(celldeps: &[(&[u8; 32], u8, &[u8; 32])]) -> generated::CelldepVec {
+    let celldeps = celldeps
+        .iter()
+        .map(|(tx_hash, index, data_hash)| mol_celldep(tx_hash, *index, data_hash))
+        .collect::<Vec<_>>();
+    generated::CelldepVec::new_builder().set(celldeps).build()
+}
+
+pub fn mol_identity(flag: u8, hash: &[u8; 32]) -> Vec<u8> {
+    generated::Identity::new_builder()
+        .flag(flag.into())
         .project_id(mol_hash(hash))
         .build()
         .as_bytes()
-        .to_vec();
-    flag_0_bytes.insert(0, 0u8);
-    flag_0_bytes
+        .to_vec()
 }
 
-pub fn mol_flag_1(hash: &[u8; 32]) -> Vec<u8> {
-    let mut flag_1_bytes = generated::Flag1::new_builder()
-        .project_id(mol_hash(hash))
-        .build()
-        .as_bytes()
-        .to_vec();
-    flag_1_bytes.insert(0, 1u8);
-    flag_1_bytes
-}
-
-pub fn mol_flag_2(method: &str, lockscript: &[u8], recipient: Option<Bytes>) -> Vec<u8> {
-    let mut flag_2_bytes = generated::Flag2::new_builder()
+pub fn mol_request(
+    method: &str,
+    cells: &[(&[u8], Option<&[u8]>)],
+    cell_deps: &[(&[u8; 32], u8, &[u8; 32])],
+    floatings: &[&[u8]],
+) -> Vec<u8> {
+    generated::Request::new_builder()
         .function_call(mol_string(method.as_bytes()))
-        .caller_lockscript(mol_string(lockscript))
-        .recipient_lockscript(mol_string_opt(recipient))
+        .cells(mol_cell_vec(cells))
+        .function_celldeps(mol_celldep_vec(cell_deps))
+        .floating_lockscripts(mol_string_vec(floatings))
         .build()
         .as_bytes()
-        .to_vec();
-    flag_2_bytes.insert(0, 2u8);
-    flag_2_bytes
+        .to_vec()
 }
 
-pub fn mol_flag_2_raw(bytes: &[u8]) -> Option<generated::Flag2> {
-    let payload = &bytes[1..];
-    if generated::Flag2Reader::verify(payload, false).is_ok() {
-        Some(generated::Flag2::new_unchecked(Bytes::from(
-            payload.to_vec(),
-        )))
-    } else {
-        None
-    }
+pub fn is_mol_request(bytes: &[u8]) -> bool {
+    generated::RequestReader::verify(bytes, false).is_ok()
 }
 
-pub fn is_mol_flag_0(bytes: &[u8], hash: Option<&[u8; 32]>) -> bool {
-    if !bytes.is_empty()
-        && bytes[0] == 0u8
-        && generated::Flag0Reader::verify(&bytes[1..], false).is_ok()
-    {
-        if let Some(hash) = hash {
-            let flag_0 = generated::Flag0::new_unchecked(Bytes::from(bytes[1..].to_vec()));
-            if flag_0.project_id().as_slice() == hash.as_slice() {
-                return true;
-            }
-        } else {
+pub fn is_mol_request_identity(bytes: &[u8]) -> bool {
+    if generated::IdentityReader::verify(bytes, false).is_ok() {
+        let identity = generated::Identity::new_unchecked(bytes.to_vec().into());
+        if identity.flag() == 2u8.into() {
             return true;
         }
     }
     false
 }
 
-pub fn is_mol_flag_1(bytes: &[u8], hash: Option<&[u8; 32]>) -> bool {
-    if !bytes.is_empty()
-        && bytes[0] == 1u8
-        && generated::Flag1Reader::verify(&bytes[1..], false).is_ok()
-    {
-        if let Some(hash) = hash {
-            let flag_1 = generated::Flag1::new_unchecked(Bytes::from(bytes[1..].to_vec()));
-            if flag_1.project_id().as_slice() == hash.as_slice() {
-                return true;
-            }
-        } else {
-            return true;
-        }
-    }
-    false
-}
-
-pub fn is_mol_flag_2(bytes: &[u8]) -> bool {
-    if !bytes.is_empty() && bytes[0] == 2u8 {
-        generated::Flag2Reader::verify(&bytes[1..], false).is_ok()
-    } else {
-        false
-    }
+pub fn parse_mol_request(bytes: &[u8]) -> generated::Request {
+    generated::Request::new_unchecked(bytes.to_vec().into())
 }

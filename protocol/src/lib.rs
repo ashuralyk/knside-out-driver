@@ -142,10 +142,10 @@ impl traits::ContextRpc for TestVars::MockContextRpc {
     async fn estimate_payment_ckb(
         &mut self,
         _project_type_args: &H256,
-        _sender: &ckb_types::packed::Script,
         _method_call: &str,
-        _previous_json_data: &str,
-        _recipient: &Option<ckb_types::packed::Script>,
+        _inputs: &[(ckb_types::packed::Script, String)],
+        _candidates: &[ckb_types::packed::Script],
+        _components: &[String],
         _response: tokio::sync::mpsc::UnboundedSender<KoResult<u64>>,
     ) -> bool {
         false

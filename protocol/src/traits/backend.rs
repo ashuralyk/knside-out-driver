@@ -1,3 +1,4 @@
+use crate::types::backend::KoRequestInput;
 use crate::{async_trait, KoResult, ProjectDeps, H256};
 use ckb_types::{bytes::Bytes, packed::OutPoint};
 
@@ -20,10 +21,10 @@ pub trait Backend: Send + Sync {
 
     async fn create_project_request_digest(
         &mut self,
-        address: String,
-        recipient: Option<String>,
-        previous_cell: Option<OutPoint>,
         function_call: String,
+        input: KoRequestInput,
+        component_outputs: &[OutPoint],
+        candidate_lockscripts: &[String],
         project_type_args: &H256,
         project_deps: &ProjectDeps,
     ) -> KoResult<(H256, u64)>;

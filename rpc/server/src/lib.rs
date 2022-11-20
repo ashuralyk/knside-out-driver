@@ -8,6 +8,7 @@ use ko_protocol::ckb_sdk::HumanCapacity;
 use ko_protocol::ckb_types::bytes::Bytes;
 use ko_protocol::tokio::sync::Mutex;
 use ko_protocol::traits::Backend;
+use ko_protocol::types::backend::KoRequestInput;
 use ko_protocol::ProjectDeps;
 use ko_protocol::{async_trait, hex, log, types::server::*, KoResult, H256};
 
@@ -39,10 +40,10 @@ trait KnsideRpc {
     #[method(name = "ko_makeRequestTransactionDigest")]
     async fn make_request_transaction_digest(
         &self,
-        sender: String,
         contract_call: String,
-        recipient: Option<String>,
-        previous_cell: Option<OutPoint>,
+        inputs: Vec<OutPoint>,
+        candidates: Vec<String>,
+        components: Vec<OutPoint>,
         project_type_args: H256,
     ) -> RpcResult<KoMakeRequestTransactionDigestResponse>;
 
@@ -98,7 +99,7 @@ impl<B: Backend + 'static> KnsideRpcServer for RpcServer<B> {
             .await
             .map_err(|err| Error::Custom(err.to_string()))?;
         let result = KoMakeDeployTransactionDigestResponse::new(
-            hex::encode(&digest),
+            hex::encode(digest),
             hex::encode(project_type_args),
         );
         Ok(result)
@@ -132,31 +133,35 @@ impl<B: Backend + 'static> KnsideRpcServer for RpcServer<B> {
 
     async fn make_request_transaction_digest(
         &self,
-        sender: String,
         contract_call: String,
-        recipient: Option<String>,
-        previous_cell: Option<OutPoint>,
+        inputs: Vec<OutPoint>,
+        candidates: Vec<String>,
+        components: Vec<OutPoint>,
         project_type_args: H256,
     ) -> RpcResult<KoMakeRequestTransactionDigestResponse> {
         log::debug!(
-            "[RPC] receive `make_request_transaction_digest` rpc call <= {}({})",
-            sender,
+            "[RPC] receive `make_request_transaction_digest` rpc call <= {}",
             contract_call
         );
         let mut backend = self.ctx.backend.lock().await;
+        let inputs = inputs.iter().map(|v| v.clone().into()).collect::<Vec<_>>();
+        let components = components
+            .iter()
+            .map(|v| v.clone().into())
+            .collect::<Vec<_>>();
         let (digest, payment_ckb) = backend
             .create_project_request_digest(
-                sender,
-                recipient,
-                previous_cell.map(|v| v.into()),
                 contract_call,
+                KoRequestInput::Outpoints(inputs),
+                components.as_slice(),
+                candidates.as_slice(),
                 &project_type_args,
                 &self.ctx.project_deps,
             )
             .await
             .map_err(|err| Error::Custom(err.to_string()))?;
         let result = KoMakeRequestTransactionDigestResponse::new(
-            hex::encode(&digest),
+            hex::encode(digest),
             HumanCapacity::from(payment_ckb).to_string(),
         );
         Ok(result)

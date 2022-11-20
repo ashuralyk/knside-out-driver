@@ -4,6 +4,7 @@ use ko_protocol::ckb_types::bytes::Bytes;
 use ko_protocol::ckb_types::core::TransactionView;
 use ko_protocol::secp256k1::SecretKey;
 use ko_protocol::traits::{Backend, CkbClient, Driver};
+use ko_protocol::types::backend::KoRequestInput;
 use ko_protocol::{serde_json, tokio, TestVars::*};
 use ko_rpc_client::RpcClient;
 
@@ -109,7 +110,7 @@ async fn request_project_request_cell() {
     );
     let mut backend = BackendImpl::new(&rpc_client, MockContextRpc::default());
     let mut previous_cell = None;
-    let function_call = "withdraw(600)".into();
+    let function_call = "battle_win()".into();
     if function_call == "claim_nfts" {
         // search previous personal cell
         let personal_data = backend
@@ -133,10 +134,10 @@ async fn request_project_request_cell() {
     // create digest
     let (digest, _) = backend
         .create_project_request_digest(
-            OWNER_ADDRESS.into(),
-            None,
-            previous_cell,
             function_call,
+            KoRequestInput::Address(OWNER_ADDRESS.into()),
+            &vec![],
+            &vec![],
             &PROJECT_TYPE_ARGS.into(),
             &PROJECT_VARS,
         )

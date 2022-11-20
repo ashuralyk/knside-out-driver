@@ -11,9 +11,8 @@ use ko_protocol::ckb_types::prelude::{Builder, Entity, Pack, Unpack};
 use ko_protocol::serde_json::to_string;
 use ko_protocol::tokio::sync::mpsc::unbounded_channel;
 use ko_protocol::traits::{Backend, CkbClient, ContextRpc};
-use ko_protocol::{
-    async_trait, hex, mol_flag_0, mol_flag_1, mol_flag_2, KoResult, ProjectDeps, H256,
-};
+use ko_protocol::types::backend::KoRequestInput;
+use ko_protocol::{async_trait, hex, mol_identity, KoResult, ProjectDeps, H256};
 
 #[cfg(test)]
 mod tests;
@@ -70,7 +69,7 @@ impl<C: CkbClient, R: ContextRpc> Backend for BackendImpl<C, R> {
         };
         let global_type_script = helper::build_knsideout_script(
             &project_deps.project_code_hash,
-            mol_flag_0(&[0u8; 32]).as_slice(),
+            mol_identity(0, &[0u8; 32]).as_slice(),
         );
         let mut outputs = vec![
             // project cell
@@ -129,7 +128,7 @@ impl<C: CkbClient, R: ContextRpc> Backend for BackendImpl<C, R> {
             .build();
         let global_type_script = helper::build_knsideout_script(
             &project_deps.project_code_hash,
-            mol_flag_0(project_type_id.as_bytes32()).as_slice(),
+            mol_identity(0, project_type_id.as_bytes32()).as_slice(),
         );
         outputs[1] = outputs[1]
             .clone()
@@ -249,10 +248,10 @@ impl<C: CkbClient, R: ContextRpc> Backend for BackendImpl<C, R> {
 
     async fn create_project_request_digest(
         &mut self,
-        address: String,
-        recipient: Option<String>,
-        previous_cell: Option<OutPoint>,
         function_call: String,
+        input: KoRequestInput,
+        component_outpoints: &[OutPoint],
+        candidate_lockscripts: &[String],
         project_type_args: &H256,
         project_deps: &ProjectDeps,
     ) -> KoResult<(H256, u64)> {
@@ -260,51 +259,64 @@ impl<C: CkbClient, R: ContextRpc> Backend for BackendImpl<C, R> {
         let project_type_id: H256 = helper::recover_type_id_script(project_type_args.as_bytes())
             .calc_script_hash()
             .unpack();
-        let secp256k1_script: Script = Address::from_str(&address)
-            .map_err(|_| BackendError::InvalidAddressFormat(address))?
-            .payload()
-            .into();
-        let recipient_secp256k1_script = {
-            if let Some(recipient) = recipient {
-                let script: Script = Address::from_str(&recipient)
-                    .map_err(|_| BackendError::InvalidAddressFormat(recipient))?
+        let candidates_script = candidate_lockscripts
+            .iter()
+            .map(|candidate| {
+                Ok(Address::from_str(candidate)
+                    .map_err(|_| BackendError::InvalidAddressFormat(candidate.clone()))?
                     .payload()
-                    .into();
-                Some(script)
-            } else {
-                None
-            }
-        };
-        let personal_args = mol_flag_1(project_type_id.as_bytes32());
+                    .into())
+            })
+            .collect::<Result<Vec<Script>, BackendError>>()?;
+        let personal_args = mol_identity(1, project_type_id.as_bytes32());
         let personal_script =
             helper::build_knsideout_script(&project_deps.project_code_hash, &personal_args);
 
-        // check previous cell
-        let mut previous_json_data = String::new();
+        // check input cells
         let mut inputs_capacity = 0u64;
         let mut inputs = vec![];
-        if let Some(outpoint) = previous_cell {
-            let tx: Transaction = self
-                .rpc_client
-                .get_transaction(&outpoint.tx_hash().unpack())
-                .await
-                .map_err(|err| BackendError::CkbRpcError(err.to_string()))?
-                .unwrap()
-                .transaction
-                .unwrap()
-                .inner
-                .into();
-            let tx = tx.into_view();
-            let index: u32 = outpoint.index().unpack();
-            let cell = tx.output_with_data(index as usize);
-            if let Some((cell, data)) = cell {
-                previous_json_data = String::from_utf8(data.to_vec())
-                    .map_err(|_| BackendError::InvalidPrevousCell)?;
-                inputs_capacity = cell.capacity().unpack();
-                inputs.push(CellInput::new_builder().previous_output(outpoint).build());
-            } else {
-                return Err(BackendError::InvalidPrevousCell.into());
+        let mut inputs_cell = vec![];
+        match input {
+            KoRequestInput::Address(address) => {
+                let script: Script = Address::from_str(&address)
+                    .map_err(|_| BackendError::InvalidAddressFormat(address))?
+                    .payload()
+                    .into();
+                let (cell, ckb) = helper::fetch_cell_by_script(&self.rpc_client, &script).await?;
+                inputs_cell.push((script, String::new()));
+                inputs.push(cell);
+                inputs_capacity = ckb;
             }
+            KoRequestInput::Outpoints(outpoints) => {
+                for out_point in outpoints {
+                    let (cell, data, _) =
+                        helper::fetch_outpoint_cell(&self.rpc_client, &out_point).await?;
+                    let ckb: u64 = cell.capacity().unpack();
+                    inputs_capacity += ckb;
+                    inputs.push(
+                        CellInput::new_builder()
+                            .previous_output(out_point.clone())
+                            .build(),
+                    );
+                    inputs_cell.push((cell.lock(), data));
+                }
+            }
+        }
+        if inputs.is_empty() {
+            return Err(BackendError::MissInputCell.into());
+        }
+
+        // check component cells
+        let mut components_data = vec![];
+        let mut components = vec![];
+        for out_point in component_outpoints {
+            let (_, data, data_hash) =
+                helper::fetch_outpoint_cell(&self.rpc_client, out_point).await?;
+            if data.is_empty() {
+                return Err(BackendError::InvalidComponentCell.into());
+            }
+            components_data.push(data);
+            components.push((out_point, data_hash));
         }
 
         // request payment ckb of this call
@@ -314,10 +326,10 @@ impl<C: CkbClient, R: ContextRpc> Backend for BackendImpl<C, R> {
                 .context_rpc
                 .estimate_payment_ckb(
                     project_type_args,
-                    &secp256k1_script,
                     &function_call,
-                    &previous_json_data,
-                    &recipient_secp256k1_script,
+                    &inputs_cell,
+                    &candidates_script,
+                    &components_data,
                     sender,
                 )
                 .await;
@@ -328,18 +340,19 @@ impl<C: CkbClient, R: ContextRpc> Backend for BackendImpl<C, R> {
             }
         };
 
-        // build reqeust transaction outputs
-        let request_args = mol_flag_2(
-            &function_call,
-            secp256k1_script.as_slice(),
-            recipient_secp256k1_script.map(|v| v.as_bytes()),
-        );
+        // build request transaction outputs
+        let request_args = mol_identity(2, project_type_id.as_bytes32());
         let request_script =
             helper::build_knsideout_script(&project_deps.project_code_hash, &request_args);
-        let request_capacity =
-            Capacity::bytes(previous_json_data.len()).unwrap().as_u64() + payment_ckb;
+        let request_data = helper::make_request_data(
+            &function_call,
+            &inputs_cell,
+            &components,
+            &candidates_script,
+        );
+        let request_capacity = Capacity::bytes(request_data.len()).unwrap().as_u64() + payment_ckb;
         let mut outputs = vec![
-            // reqeust cell
+            // request cell
             CellOutput::new_builder()
                 .lock(request_script)
                 .type_(Some(personal_script).pack())
@@ -347,19 +360,16 @@ impl<C: CkbClient, R: ContextRpc> Backend for BackendImpl<C, R> {
                 .unwrap(),
             // change cell
             CellOutput::new_builder()
-                .lock(secp256k1_script.clone())
+                .lock(inputs_cell[0].0.clone())
                 .build_exact_capacity(Capacity::zero())
                 .unwrap(),
         ];
-        let outputs_data = vec![
-            Bytes::from(previous_json_data.as_bytes().to_vec()),
-            Bytes::new(),
-        ];
+        let outputs_data = vec![Bytes::from(request_data), Bytes::new()];
         let outputs_capacity = helper::calc_outputs_capacity(&outputs, "1.0");
 
-        // fill reqeust transaction inputs
+        // fill request transaction inputs
         let search = SearchKey {
-            script: secp256k1_script.into(),
+            script: inputs_cell[0].0.clone().into(),
             script_type: ScriptType::Lock,
             filter: None,
         };
@@ -519,7 +529,7 @@ impl<C: CkbClient, R: ContextRpc> Backend for BackendImpl<C, R> {
         let project_type_id: H256 = helper::recover_type_id_script(project_type_args.as_bytes())
             .calc_script_hash()
             .unpack();
-        let global_args = mol_flag_0(project_type_id.as_bytes32());
+        let global_args = mol_identity(0, project_type_id.as_bytes32());
         let global_type_script =
             helper::build_knsideout_script(&project_deps.project_code_hash, &global_args);
         let search = SearchKey {
@@ -557,7 +567,7 @@ impl<C: CkbClient, R: ContextRpc> Backend for BackendImpl<C, R> {
         let project_type_id: H256 = helper::recover_type_id_script(project_type_args.as_bytes())
             .calc_script_hash()
             .unpack();
-        let personal_args = mol_flag_1(project_type_id.as_bytes32());
+        let personal_args = mol_identity(1, project_type_id.as_bytes32());
         let personal_type_script =
             helper::build_knsideout_script(&project_deps.project_code_hash, &personal_args);
         let secp256k1_script: Script = Address::from_str(&address)

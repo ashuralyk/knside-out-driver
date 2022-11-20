@@ -11,7 +11,7 @@ pub enum KoContextRpcEcho {
     #[allow(clippy::type_complexity)]
     EstimatePaymentCkb(
         (
-            (Script, String, String, Option<Script>),
+            (Vec<(Script, Bytes)>, String, Vec<Script>, Vec<Bytes>),
             UnboundedSender<KoResult<u64>>,
         ),
     ),

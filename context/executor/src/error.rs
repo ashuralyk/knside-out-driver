@@ -19,6 +19,9 @@ pub enum ExecutorError {
     #[display(fmt = "Personal data is not a JSON string")]
     InvalidJsonFormatForPersonalData,
 
+    #[display(fmt = "Celldep data is not a JSON string")]
+    InvalidJsonFormatForCelldepData,
+
     #[display(fmt = "Invalid request lua code, code = {}, reason = {}", _0, _1)]
     ErrorLoadRequestLuaCode(String, String),
 
@@ -26,7 +29,7 @@ pub enum ExecutorError {
     OwnerLockhashMismatch(String, String),
 
     #[display(fmt = "KOC.user mismatch")]
-    UnexpectedUserLockhash,
+    UnexpectedUserOutputLockhash,
 
     #[display(fmt = "KOC.driver mismatch")]
     UnexpectedDriverLockhash,

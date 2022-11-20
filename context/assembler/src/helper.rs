@@ -3,10 +3,12 @@ use ko_protocol::ckb_sdk::rpc::ckb_indexer::{ScriptType, SearchKey, SearchKeyFil
 use ko_protocol::ckb_sdk::traits::LiveCell;
 use ko_protocol::ckb_types::bytes::Bytes;
 use ko_protocol::ckb_types::core::{Capacity, ScriptHashType, TransactionView};
-use ko_protocol::ckb_types::packed::{CellInput, CellOutput, Script};
+use ko_protocol::ckb_types::packed::{CellInput, CellOutput, Script, Transaction};
 use ko_protocol::ckb_types::prelude::{Builder, Entity, Pack, Unpack};
+use ko_protocol::generated::Request;
 use ko_protocol::traits::CkbClient;
-use ko_protocol::{is_mol_flag_2, mol_flag_0, mol_flag_1, KoResult, H256};
+use ko_protocol::types::assembler::KoCellOutput;
+use ko_protocol::{is_mol_request, is_mol_request_identity, mol_identity, KoResult, H256};
 
 use crate::error::AssemblerError;
 
@@ -44,7 +46,7 @@ pub async fn search_global_cell(
     let global_typescript = Script::new_builder()
         .code_hash(code_hash.pack())
         .hash_type(ScriptHashType::Data.into())
-        .args(mol_flag_0(project_id.as_bytes32()).as_slice().pack())
+        .args(mol_identity(0, project_id.as_bytes32()).as_slice().pack())
         .build();
     let mut search_key = SearchKey {
         script: global_typescript.into(),
@@ -75,7 +77,7 @@ pub fn make_global_script(code_hash: &H256, project_id: &H256) -> Script {
     Script::new_builder()
         .code_hash(code_hash.pack())
         .hash_type(ScriptHashType::Data.into())
-        .args(mol_flag_0(project_id.as_bytes32()).as_slice().pack())
+        .args(mol_identity(0, project_id.as_bytes32()).as_slice().pack())
         .build()
 }
 
@@ -83,19 +85,132 @@ pub fn make_personal_script(code_hash: &H256, project_id: &H256) -> Script {
     Script::new_builder()
         .code_hash(code_hash.pack())
         .hash_type(ScriptHashType::Data.into())
-        .args(mol_flag_1(project_id.as_bytes32()).as_slice().pack())
+        .args(mol_identity(1, project_id.as_bytes32()).as_slice().pack())
         .build()
 }
 
-pub fn check_valid_request(cell: &CellOutput, code_hash: &H256) -> bool {
+pub fn check_valid_request(cell: &CellOutput, data: &[u8], code_hash: &H256) -> bool {
     let lock = &cell.lock();
     if lock.code_hash().as_slice() != code_hash.as_bytes()
         || lock.hash_type() != ScriptHashType::Data.into()
-        || !is_mol_flag_2(&lock.args().raw_data())
+        || !is_mol_request_identity(&lock.args().raw_data())
+        || !is_mol_request(data)
     {
         return false;
     }
     true
+}
+
+pub fn extract_inputs_from_request(request: &Request) -> KoResult<Vec<(Script, Bytes)>> {
+    let cells = request
+        .cells()
+        .into_iter()
+        .map(|cell| {
+            let script = Script::from_slice(&cell.owner_lockscript().raw_data())
+                .map_err(|_| AssemblerError::UnsupportedCallerScriptFormat)?;
+            let data = if cell.data().is_none() {
+                Bytes::new()
+            } else {
+                cell.data().to_opt().unwrap().as_bytes()
+            };
+            Ok((script, data))
+        })
+        .collect::<KoResult<_>>()?;
+    Ok(cells)
+}
+
+pub fn extract_candidates_from_request(request: &Request) -> KoResult<Vec<Script>> {
+    let floatings = request
+        .floating_lockscripts()
+        .into_iter()
+        .map(|floating| {
+            Ok(Script::from_slice(&floating.raw_data())
+                .map_err(|_| AssemblerError::UnsupportedRecipientScriptFormat)?)
+        })
+        .collect::<KoResult<_>>()?;
+    Ok(floatings)
+}
+
+pub async fn extract_components_from_request(
+    rpc: &impl CkbClient,
+    request: &Request,
+) -> KoResult<Vec<Bytes>> {
+    let mut celldeps = vec![];
+    for celldep in request.function_celldeps().into_iter() {
+        let hash = {
+            let mut hash = [0u8; 32];
+            hash.copy_from_slice(celldep.tx_hash().as_slice());
+            hash
+        };
+        let tx: Transaction = rpc
+            .get_transaction(&hash.into())
+            .await
+            .map_err(|err| AssemblerError::CkbRpcError(err.to_string()))?
+            .unwrap()
+            .transaction
+            .unwrap()
+            .inner
+            .into();
+        let tx = tx.into_view();
+        let index: u8 = celldep.index().into();
+        let data = tx.outputs_data().get(index as usize);
+        if let Some(data) = data {
+            celldeps.push(data.unpack());
+        } else {
+            return Err(AssemblerError::InvalidFunctionCelldep.into());
+        }
+    }
+    Ok(celldeps)
+}
+
+pub fn process_raw_outputs(
+    i: usize,
+    cell_output: &KoCellOutput,
+    project_code_hash: &H256,
+    project_id: &H256,
+) -> (Vec<CellOutput>, Vec<Bytes>, u64) {
+    let mut outputs_cell = vec![];
+    let mut outputs_capacity = 0u64;
+    let mut outputs_data = vec![];
+    cell_output.cells.iter().for_each(|(script, data)| {
+        let mut cell_output = CellOutput::new_builder()
+            .lock(script.clone())
+            .build_exact_capacity(Capacity::zero())
+            .unwrap();
+        let mut cell_output_data = Bytes::new();
+
+        // handle cell which will contain personal json data
+        if let Some(data) = data {
+            let type_ = if i == 0 {
+                make_global_script(project_code_hash, project_id)
+            } else {
+                make_personal_script(project_code_hash, project_id)
+            };
+            cell_output = cell_output
+                .as_builder()
+                .type_(Some(type_).pack())
+                .build_exact_capacity(Capacity::bytes(data.len()).unwrap())
+                .unwrap();
+            cell_output_data = data.clone();
+        }
+
+        // record details
+        let capacity: u64 = cell_output.capacity().unpack();
+        outputs_capacity += capacity;
+        outputs_cell.push(cell_output);
+        outputs_data.push(cell_output_data);
+    });
+
+    if cell_output.capacity > outputs_capacity && !outputs_cell.is_empty() {
+        let extra_ckb = cell_output.capacity - outputs_capacity;
+        outputs_cell[0] = outputs_cell[0]
+            .clone()
+            .as_builder()
+            .build_exact_capacity(Capacity::shannons(extra_ckb))
+            .unwrap();
+        outputs_capacity = cell_output.capacity;
+    }
+    (outputs_cell, outputs_data, outputs_capacity)
 }
 
 pub async fn fill_transaction_capacity_diff(

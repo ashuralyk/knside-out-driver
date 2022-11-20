@@ -37,8 +37,14 @@ pub enum BackendError {
     #[display(fmt = "Bad ckb rpc call, error = {}", _0)]
     CkbRpcError(String),
 
-    #[display(fmt = "Previous cell not found")]
-    InvalidPrevousCell,
+    #[display(fmt = "Input cell not enough")]
+    MissInputCell,
+
+    #[display(fmt = "Cell not found")]
+    InvalidCell,
+
+    #[display(fmt = "Component cell is broken")]
+    InvalidComponentCell,
 
     #[display(fmt = "Project deployment cell not found, type_args = {}", _0)]
     MissProjectDeploymentCell(H256),
