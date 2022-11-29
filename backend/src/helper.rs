@@ -108,7 +108,7 @@ pub async fn fetch_cell_by_script(
         script_type: ScriptType::Lock,
         filter: None,
     };
-    let (cells, ckb) = fetch_live_cells(rpc, search, 0, 0).await?;
+    let (cells, ckb) = fetch_live_cells(rpc, search, 0, 1).await?;
     if cells.is_empty() {
         return Err(BackendError::MissInputCell.into());
     }

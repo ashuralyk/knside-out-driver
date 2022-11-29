@@ -150,7 +150,7 @@ impl<C: CkbClient> Assembler for AssemblerImpl<C> {
                     capacity - exact_capacity
                 };
                 requests.push(KoRequest::new(
-                    cell.output_data.into_bytes(),
+                    request.function_call().raw_data(),
                     inputs,
                     candidates,
                     components,

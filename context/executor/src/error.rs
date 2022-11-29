@@ -16,6 +16,9 @@ pub enum ExecutorError {
     #[display(fmt = "Personal data is not UTF-8 format")]
     InvalidUTF8FormatForPersonalData,
 
+    #[display(fmt = "Function call is not UTF-8 format")]
+    InvalidUFT8FormatForFunctionCall,
+
     #[display(fmt = "Personal data is not a JSON string")]
     InvalidJsonFormatForPersonalData,
 
@@ -33,6 +36,9 @@ pub enum ExecutorError {
 
     #[display(fmt = "KOC.driver mismatch")]
     UnexpectedDriverLockhash,
+
+    #[display(fmt = "The function call result must be Nil or Table")]
+    UnexpectedFunctionCallResult,
 
     #[display(fmt = "Lua code execution error = {}", _0)]
     LuaVmError(String),

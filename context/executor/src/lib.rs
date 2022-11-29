@@ -106,6 +106,7 @@ impl Executor for ExecutorImpl {
             let context: Table = luac!(lua.globals().get("KOC"));
             let global_table: Table = luac!(context.get("global"));
             let data = serde_json::to_string(&global_table).expect("execute global");
+            println!("global_data = {}", data);
             Bytes::from(data.as_bytes().to_vec())
         };
 

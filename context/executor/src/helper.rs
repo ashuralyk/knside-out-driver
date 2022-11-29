@@ -54,13 +54,10 @@ fn koc_fill_components(lua: &Lua, context: &Table, components: &[Bytes]) -> KoRe
     Ok(())
 }
 
-fn koc_extract_outputs(
-    context: &Table,
-    method_call: &Bytes,
-) -> KoResult<Vec<(String, Option<Bytes>)>> {
-    let outputs: mlua::Table = luac!(context.get("outputs"));
+fn koc_extract_outputs(lua: &Lua, method_call: &String) -> KoResult<Vec<(String, Option<Bytes>)>> {
+    let outputs: Table = luac!(lua.globals().get("__outputs__"));
     let outputs = outputs
-        .sequence_values::<mlua::Table>()
+        .sequence_values::<Table>()
         .map(|table| {
             let table = luac!(table);
             let output_owner = {
@@ -76,8 +73,8 @@ fn koc_extract_outputs(
                         Some(Bytes::from(data.as_bytes().to_vec()))
                     }
                     _ => Err(ExecutorError::ErrorLoadRequestLuaCode(
-                        String::from_utf8(method_call.to_vec()).unwrap(),
-                        "the output_data can only be nil or table".into(),
+                        method_call.clone(),
+                        "output_data should be nil or table".into(),
                     ))?,
                 }
             };
@@ -103,6 +100,38 @@ fn get_avaliable_users<'a>(
     users
 }
 
+fn apply_function_call_result(lua: &Lua, result: &Value) -> KoResult<()> {
+    match result {
+        Value::Nil => {
+            let context: Table = luac!(lua.globals().get("KOC"));
+            let inputs: Table = luac!(context.get("inputs"));
+            luac!(lua.globals().set("__outputs__", inputs));
+            Ok(())
+        }
+        Value::Table(table) => {
+            let globals = lua.globals();
+            // store outputs into global or use inputs instead
+            if let Value::Table(outputs) = luac!(table.get("outputs")) {
+                luac!(globals.set("__outputs__", outputs));
+            } else {
+                let context: Table = luac!(globals.get("KOC"));
+                let inputs: Table = luac!(context.get("inputs"));
+                luac!(globals.set("__outputs__", inputs));
+            }
+            // re-write global value
+            if let Value::Table(global) = luac!(table.get("global")) {
+                luac!(globals.set("global", global));
+            }
+            // re-write driver value
+            if let Value::String(driver) = luac!(table.get("driver")) {
+                luac!(globals.set("driver", driver));
+            }
+            Ok(())
+        }
+        _ => return Err(ExecutorError::UnexpectedFunctionCallResult.into()),
+    }
+}
+
 pub fn run_request(
     lua: &Lua,
     owner: &Script,
@@ -119,14 +148,15 @@ pub fn run_request(
     luac!(lua.globals().set("i", offset));
 
     // run user request call
-    lua.load(&request.function_call.to_vec())
-        .call(())
-        .map_err(|err| {
-            ExecutorError::ErrorLoadRequestLuaCode(
-                String::from_utf8(request.function_call.to_vec()).unwrap(),
-                err.to_string(),
-            )
-        })?;
+    let method_call = {
+        let function_call = String::from_utf8(request.function_call.to_vec())
+            .map_err(|_| ExecutorError::InvalidUFT8FormatForFunctionCall)?;
+        "return ".to_owned() + &function_call
+    };
+    let result: Value = lua.load(&method_call).call(()).map_err(|err| {
+        ExecutorError::ErrorLoadRequestLuaCode(method_call.clone(), err.to_string())
+    })?;
+    apply_function_call_result(lua, &result)?;
 
     // check specified owner lock_hash
     let context: Table = luac!(lua.globals().get("KOC"));
@@ -136,9 +166,6 @@ pub fn run_request(
     if koc_owner != expect_owner {
         return Err(ExecutorError::OwnerLockhashMismatch(koc_owner, expect_owner).into());
     }
-
-    // ure global is a table value
-    let _global: Table = luac!(context.get("global"));
 
     // check specified driver lock_hash
     let expect_users = get_avaliable_users(&request.inputs, &request.candidates);
@@ -153,8 +180,8 @@ pub fn run_request(
         }
     }
 
-    // check specified user ouputs
-    let outputs = koc_extract_outputs(&context, &request.function_call)?
+    // check specified user outputs
+    let outputs = koc_extract_outputs(lua, &method_call)?
         .iter()
         .map(|(owner, data)| {
             if let Some(script) = expect_users.get(owner) {
@@ -228,6 +255,7 @@ pub fn parse_requests_to_outputs(
                     Ok(output)
                 }
                 Err(err) => {
+                    println!("request err = {}", err);
                     // recover previous global data
                     luac!(lua.globals().set("KOC", previous_context));
                     Err(err)

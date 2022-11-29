@@ -30,7 +30,7 @@ function withdraw(quantity)
 end
 
 function battle_win()
-    assert(KOC.ckb_deposit(200), "deposit: sufficient ckbytes of 200")
+    -- assert(KOC.ckb_deposit(200), "deposit: sufficient ckbytes of 200")
     local sender = KOC.inputs[1].owner
     local global = KOC.global
 
