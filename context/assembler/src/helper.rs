@@ -111,7 +111,7 @@ pub fn extract_inputs_from_request(request: &Request) -> KoResult<Vec<(Script, B
             let data = if cell.data().is_none() {
                 Bytes::new()
             } else {
-                cell.data().to_opt().unwrap().as_bytes()
+                cell.data().to_opt().unwrap().raw_data()
             };
             Ok((script, data))
         })
@@ -201,14 +201,16 @@ pub fn process_raw_outputs(
         outputs_data.push(cell_output_data);
     });
 
-    if cell_output.capacity > outputs_capacity && !outputs_cell.is_empty() {
-        let extra_ckb = cell_output.capacity - outputs_capacity;
+    // all extra capacity should be added to first cell
+    if cell_output.suggested_capacity > outputs_capacity && !outputs_cell.is_empty() {
+        let extra_ckb = cell_output.suggested_capacity - outputs_capacity;
+        let previous_ckb: u64 = outputs_cell[0].capacity().unpack();
         outputs_cell[0] = outputs_cell[0]
             .clone()
             .as_builder()
-            .build_exact_capacity(Capacity::shannons(extra_ckb))
-            .unwrap();
-        outputs_capacity = cell_output.capacity;
+            .capacity((previous_ckb + extra_ckb).pack())
+            .build();
+        outputs_capacity = cell_output.suggested_capacity;
     }
     (outputs_cell, outputs_data, outputs_capacity)
 }
@@ -280,6 +282,7 @@ pub fn get_extractable_capacity(cell: &CellOutput, data_len: usize) -> u64 {
         .occupied_capacity(Capacity::bytes(data_len).unwrap())
         .unwrap()
         .as_u64();
+    assert!(capacity >= occupied_capacity, "global cell capacity error");
     capacity - occupied_capacity
 }
 

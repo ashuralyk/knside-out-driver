@@ -109,33 +109,31 @@ async fn request_project_request_cell() {
         &DRIVE_CONFIG,
     );
     let mut backend = BackendImpl::new(&rpc_client, MockContextRpc::default());
-    let mut previous_cell = None;
-    let function_call = "battle_win()".into();
-    if function_call == "claim_nfts" {
-        // search previous personal cell
-        let personal_data = backend
+    let function_call = "claim_nfts()".into();
+    let previous_cells = {
+        backend
             .search_personal_data(
                 OWNER_ADDRESS.into(),
                 &PROJECT_TYPE_ARGS.into(),
                 &PROJECT_VARS,
             )
             .await
-            .expect("search personal");
-        previous_cell = {
-            if let Some((_, outpoint)) = personal_data.first() {
-                Some(outpoint.clone())
-            } else {
-                None
-            }
-        };
+            .expect("search personal")
+            .into_iter()
+            .map(|(_, outpoint)| outpoint)
+            .collect::<Vec<_>>()
+    };
+    println!("previous = {:?}", previous_cells);
+    let mut request_input = KoRequestInput::Address(OWNER_ADDRESS.into());
+    if !previous_cells.is_empty() {
+        request_input = KoRequestInput::Outpoints(previous_cells);
     }
-    println!("previous = {:?}", previous_cell);
 
     // create digest
     let (digest, _) = backend
         .create_project_request_digest(
             function_call,
-            KoRequestInput::Address(OWNER_ADDRESS.into()),
+            request_input,
             &vec![],
             &vec![],
             &PROJECT_TYPE_ARGS.into(),

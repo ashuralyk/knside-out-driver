@@ -31,8 +31,11 @@ fn koc_fill_inputs(lua: &Lua, context: &Table, inputs: &[(Script, Bytes)]) -> Ko
             if !data.is_empty() {
                 let value: serde_json::Value = serde_json::from_slice(data)
                     .map_err(|_| ExecutorError::InvalidJsonFormatForPersonalData)?;
-                let data = luac!(lua.to_value(&value));
-                luac!(input.set("data", data));
+                if let mlua::Value::Table(data) = luac!(lua.to_value(&value)) {
+                    luac!(input.set("data", data));
+                } else {
+                    return Err(ExecutorError::InvalidJsonFormatForPersonalData.into());
+                }
             }
             Ok(input)
         })
@@ -247,11 +250,12 @@ pub fn parse_requests_to_outputs(
             };
             match run_request(lua, owner, &mut global_cell.lock_script, request, i) {
                 Ok(mut output) => {
-                    output.capacity += if let Some(extra_ckb) = personal_extra_rc.borrow().get(&i) {
-                        *extra_ckb
-                    } else {
-                        0
-                    };
+                    output.suggested_capacity +=
+                        if let Some(extra_ckb) = personal_extra_rc.borrow().get(&i) {
+                            *extra_ckb
+                        } else {
+                            0
+                        };
                     Ok(output)
                 }
                 Err(err) => {

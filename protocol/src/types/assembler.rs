@@ -51,5 +51,5 @@ impl KoAssembleReceipt {
 #[derive(Constructor)]
 pub struct KoCellOutput {
     pub cells: Vec<(Script, Option<Bytes>)>,
-    pub capacity: u64,
+    pub suggested_capacity: u64,
 }

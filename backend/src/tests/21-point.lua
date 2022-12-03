@@ -69,7 +69,7 @@ function battle_lose()
 end
 
 function claim_nfts()
-    assert(KOC.ckb_deposit(200), "deposit: sufficient ckbytes of 200")
+    -- assert(KOC.ckb_deposit(200), "deposit: sufficient ckbytes of 200")
     local sender = KOC.inputs[1].owner
     local global = KOC.global
     local personal = assert(global.personals[sender], 'no sender')
@@ -77,7 +77,12 @@ function claim_nfts()
     personal.nfts = {}
     assert(#nfts > 0, "empty nfts")
 
-    local data = KOC.inputs[1].data or {}
+    local data = {}
+    for _, v in ipairs(KOC.inputs) do
+        for _, nft_id in ipairs(v.data) do
+            table.insert(data, nft_id)
+        end
+    end
     for _, nft_id in ipairs(nfts) do
         table.insert(data, nft_id)
     end
