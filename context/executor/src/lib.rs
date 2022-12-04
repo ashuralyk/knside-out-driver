@@ -8,7 +8,7 @@ use ko_protocol::traits::Executor;
 use ko_protocol::types::assembler::{KoCellOutput, KoRequest};
 use ko_protocol::types::context::KoContextGlobalCell;
 use ko_protocol::{hex, serde_json, KoResult};
-use mlua::{Function, Lua, LuaSerdeExt, Table};
+use mlua::{Lua, LuaSerdeExt, Table};
 
 mod error;
 mod helper;
@@ -93,9 +93,9 @@ impl Executor for ExecutorImpl {
         random_seeds: &[i64; 2],
     ) -> KoResult<Vec<KoResult<KoCellOutput>>> {
         let lua = self.prepare_lua_context(global_cell, project_owner, project_lua_code)?;
-        let math: Table = luac!(lua.globals().get("math"));
-        let randomseed: Function = luac!(math.get("randomseed"));
-        luac!(randomseed.call((random_seeds[0], random_seeds[1])));
+
+        // applying random seeds
+        helper::apply_randomseed(&lua, random_seeds)?;
 
         // running each user function_call requests
         let personal_outputs =

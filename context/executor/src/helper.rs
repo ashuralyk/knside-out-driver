@@ -135,6 +135,16 @@ fn apply_function_call_result(lua: &Lua, result: &Value) -> KoResult<()> {
     }
 }
 
+pub fn apply_randomseed(lua: &Lua, randomseeds: &[i64; 2]) -> KoResult<()> {
+    let math: Table = luac!(lua.globals().get("math"));
+    let randomseed: mlua::Function = luac!(math.get("randomseed"));
+    luac!(randomseed.call((randomseeds[0], randomseeds[1])));
+    // inject randomseeds
+    let context: Table = luac!(lua.globals().get("KOC"));
+    luac!(context.set("seeds", randomseeds.clone()));
+    Ok(())
+}
+
 pub fn run_request(
     lua: &Lua,
     owner: &Script,
