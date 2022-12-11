@@ -99,7 +99,7 @@ pub mod TestVars {
     pub const OWNER_ADDRESS: &str = "ckt1qyq93wzur9h9l6qwyk6d4dvkuufp6gvl08aszz5syl";
 
     pub const PROJECT_CODE_HASH: H256 =
-        h256!("0xad72f08948ad7247dc3eeac3118111b0db4ada4dbd0a7d2b21a9b0b43b8de818");
+        h256!("0x05d0e558c42c8f52d0addc2dee8dda669b66637650c4e8a0c3845c5c1f395ece");
 
     // testnet
     // pub const PROJECT_TYPE_ARGS: H256 =
@@ -111,11 +111,11 @@ pub mod TestVars {
 
     // devnet
     pub const PROJECT_TYPE_ARGS: H256 =
-        h256!("0xc6825d891df69b883f9111a04fc475b5ba5faf3388e27f43a353c47e9bc6f5b3");
+        h256!("0xe29acaaff10b646fa9ee0b46e4b1f0115920dd62cd247969553fe205bda91a2a");
     pub const SECP256K1_TX_HASH: H256 =
         h256!("0xc6bffa9ca9a9dadfec83c0307eee18fe88e42a00d05068510d799e3e4ad3ee87");
     pub const KNSIDEOUT_TX_HASH: H256 =
-        h256!("0x53b965b7d281664399ed8e49336d5169e9eddec7bab87de9a9458f008b9b2e60");
+        h256!("0x1bb506c8e1f5a57f22ccd97e5f7f5624c87ddd7772076cf2d551250af85c19ca");
 
     lazy_static! {
         pub static ref PROJECT_VARS: ProjectDeps = ProjectDeps::new(

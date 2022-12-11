@@ -1,7 +1,8 @@
 use ko_context::ContextImpl;
 use ko_protocol::ckb_jsonrpc_types::TransactionView as JsonTxView;
-use ko_protocol::ckb_types::bytes::Bytes;
-use ko_protocol::ckb_types::core::TransactionView;
+use ko_protocol::ckb_types::{
+    bytes::Bytes, core::TransactionView, h256, packed::OutPoint, prelude::Pack,
+};
 use ko_protocol::secp256k1::SecretKey;
 use ko_protocol::traits::{Backend, CkbClient, Driver};
 use ko_protocol::types::backend::KoRequestInput;
@@ -27,7 +28,7 @@ fn sign(ctx: &ContextImpl<impl CkbClient>, tx: TransactionView) -> [u8; 65] {
 
 #[tokio::test]
 async fn deploy_project_deployment_cell() {
-    let lua_code = std::fs::read_to_string("./src/tests/21-point.lua").unwrap();
+    let lua_code = std::fs::read_to_string("./src/tests/tiktok.lua").unwrap();
 
     // create digest
     let rpc_client = RpcClient::new(CKB_URL, CKB_INDEXER_URL);
@@ -63,7 +64,7 @@ async fn deploy_project_deployment_cell() {
 
 #[tokio::test]
 async fn update_project_deployment_cell() {
-    let lua_code = std::fs::read_to_string("./src/tests/21-point.lua").unwrap();
+    let lua_code = std::fs::read_to_string("./src/tests/tiktok.lua").unwrap();
 
     // create digest
     let rpc_client = RpcClient::new(CKB_URL, CKB_INDEXER_URL);
@@ -109,19 +110,23 @@ async fn request_project_request_cell() {
         &DRIVE_CONFIG,
     );
     let mut backend = BackendImpl::new(&rpc_client, MockContextRpc::default());
-    let function_call = "claim_nfts()".into();
+    let function_call = "unplace_tok_cards()".into();
     let previous_cells = {
-        backend
-            .search_personal_data(
-                OWNER_ADDRESS.into(),
-                &PROJECT_TYPE_ARGS.into(),
-                &PROJECT_VARS,
-            )
-            .await
-            .expect("search personal")
-            .into_iter()
-            .map(|(_, outpoint)| outpoint)
-            .collect::<Vec<_>>()
+        // backend
+        //     .search_personal_data(
+        //         OWNER_ADDRESS.into(),
+        //         &PROJECT_TYPE_ARGS.into(),
+        //         &PROJECT_VARS,
+        //     )
+        //     .await
+        //     .expect("search personal")
+        //     .into_iter()
+        //     .map(|(_, outpoint)| outpoint)
+        //     .collect::<Vec<_>>()
+        vec![OutPoint::new(
+            h256!("0xe7c710e805705056721813769491a6c24ebc3cc83ac4645e78c1b8c9cce55fed").pack(),
+            1,
+        )]
     };
     println!("previous = {:?}", previous_cells);
     let mut request_input = KoRequestInput::Address(OWNER_ADDRESS.into());

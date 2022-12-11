@@ -143,12 +143,12 @@ end
 ---------------------------
 
 function purchase_box()
-    assert(KOC.ckb_deposit(KOC.global.box_price), "tiktok: insufficient ckb")
+    -- assert(KOC.ckb_deposit(KOC.global.box_price), "tiktok: insufficient ckb")
     -- pay to mint a box nft
     KOC.global.box_id = KOC.global.box_id + 1
     local box = {
         box_id = KOC.global.box_id,
-        max_cards = math.random(KOC.box_cards),
+        max_cards = math.random(KOC.global.box_cards),
     }
     return {
         global = KOC.global,
@@ -162,7 +162,7 @@ function open_box()
     assert(#KOC.inputs == 1 and data(1).box_id, "tiktok: only accept one box")
     local outputs = {}
     -- consume box and mint nft cards
-    for _ = 1, KOC.inputs[1].data.max_cards do
+    for _ = 1, data(1).max_cards do
         KOC.global.nft_id = KOC.global.nft_id + 1
         table.insert(outputs, { owner = sender(), data = mint_card(1) })
     end
@@ -173,12 +173,15 @@ function open_box()
 end
 
 function fuse_cards()
+    assert(#KOC.inputs > 1, "tiktok: at least 2 cards")
     local baseline = 0
     for _, v in ipairs(KOC.inputs) do
         assert(v.data.id, "tiktok: only accept cards")
-        baseline = math.max(baseline + v.data.level * 10, 100)
+        baseline = math.min(baseline + v.data.level * 5, 95)
     end
+    KOC.global.nft_id = KOC.global.nft_id + 1
     return {
+        global = KOC.global,
         outputs = {
             { owner = sender(), data = mint_card(baseline) }
         }
