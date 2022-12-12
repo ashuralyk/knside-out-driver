@@ -3,17 +3,45 @@
 -- contract constants
 ---------------------------
 
-local MAP_WIDTH = 25
-local MAP_HEIGHT = 11
-local TIK = 1
-local TOK = 2
-local TIK_CORE_Y = 1
-local TIK_START_Y = 2
-local TIK_DIRECTION = 1
-local TOK_CORE_Y = MAP_WIDTH
-local TOK_START_Y = MAP_WIDTH - 1
-local TOK_DIRECTION = -1
-local MAX_VIEW_SCOPE = 5
+local WEAPON = {
+    "剑",
+    "枪",
+    "指虎",
+    "忍刀",
+    "大锤"
+}
+
+local SKILL = {
+    "火球",
+    "治愈",
+    "黑洞",
+    "传送",
+    "刺杀"
+}
+
+local RACE = {
+    "矮人",
+    "天使",
+    "精灵",
+    "巨魔",
+    "人类"
+}
+
+local TRIBE = {
+    "天灾",
+    "地煞",
+    "五毒",
+    "轩辕",
+    "部落"
+}
+
+local RARITY = {
+    "粗糙的",
+    "普通的",
+    "优质的",
+    "传奇的",
+    "史诗的"
+}
 
 ---------------------------
 -- contract constructor
@@ -29,8 +57,7 @@ function construct()
             box_id = 0,
             box_price = 300,
             box_cards = 3,
-            max_rounds = 50,
-            max_place_cards = 5
+            max_rounds = 5,
         }
     }
 end
@@ -47,16 +74,6 @@ local data = function (i)
     return KOC.inputs[i].data
 end
 
-local is_array = function (value, len)
-    if type(value) == "table" then
-        if len then
-            return #value == len
-        end
-        return true
-    end
-    return false
-end
-
 local random_card_level = function (baseline)
     local rand = math.random(baseline, 100)
     if rand > 95 then
@@ -69,16 +86,6 @@ local random_card_level = function (baseline)
         return 2
     else
         return 1
-    end
-end
-
-local get_card_move_step = function (level)
-    if level <= 3 then
-        return 1
-    elseif level == 4 then
-        return 2
-    else
-        return 3
     end
 end
 
@@ -100,22 +107,13 @@ local mint_card = function (baseline)
     local level = random_card_level(baseline)
     return {
         id = KOC.global.nft_id,
-        view = math.random(MAX_VIEW_SCOPE),
-        step = get_card_move_step(level),
         level = level,
+        rarity = RARITY[math.random(level)],
+        weapon = WEAPON[math.random(#WEAPON)],
+        skill = SKILL[math.random(#SKILL)],
+        race = RACE[math.random(#RACE)],
+        tribe = TRIBE[math.random[#TRIBE]],
     }
-end
-
-local search_enemies = function (runner, placement)
-    local enemies = {}
-    for _, v in ipairs(placement) do
-        local x_view = math.abs(v.coordinate.x - runner.coordinate.x)
-        local y_view = math.abs(v.coordinate.y - runner.coordinate.y)
-        if (x_view + y_view) <= runner.card.view then
-            table.insert(enemies, v)
-        end
-    end
-    return enemies
 end
 
 ---------------------------
@@ -200,113 +198,22 @@ function set_card_program(program)
     }
 end
 
-function place_tok_cards(coordinates)
-    assert(#KOC.inputs <= KOC.global.max_place_cards, "tiktok: exceed max_place_cards")
-    assert(is_array(coordinates, #KOC.inputs), "tiktok: mismatched coordinates")
+function start_tiktok_battle()
+    assert(#KOC.inputs == 2 and data(1).id and data(2).id, "tiktok: only accept two cards")
+    assert(data(1).program and data(2).program, "tiktok: program needed")
 
-    local placement = {}
-    for i, v in ipairs(KOC.inputs) do
-        assert(v.data.id and #v.data.program > 0, "tiktok: only accept programmed card")
-        assert(coordinates[i].y == TOK_START_Y, "tiktok: invalid tok coordinate")
-        table.insert(placement, {
-            card = v.data,
-            player = sender(),
-            coordinate = coordinates[i]
-        })
-    end
-    return {
-        outputs = {
-            { owner = sender(), data = placement }
-        }
-    }
-end
+    local fn1, err = load(data(1).program)
+    assert(err == nil, "tiktok: bad program 1")
+    local fn2, err = load(data(2).program)
+    assert(err == nil, "tiktok: bad program 2")
 
-function unplace_tok_cards()
-    assert(#KOC.inputs == 1 and is_array(data(1)), "tiktok: only accept one placement")
-    local outputs = {}
-    for _, v in ipairs(data(1)) do
-        assert(v.coordinate, "tiktok: invalid placement format")
-        table.insert(outputs, { owner = sender(), data = v.card })
+    for round = 1, KOC.global.max_rounds do
+        pcall(fn1, round)
+        pcall(fn2, round)
     end
-    return {
-        outputs = outputs
-    }
-end
 
-function start_tiktok_battle(coordinates, battle_id)
-    -- prepare battle context
-    assert(#KOC.components == 1 and is_array(KOC.components[1]) and KOC.components[1].coordinate,
-        "tiktok: invalid tok placement")
-    local tok_placement = KOC.components[1]
-    assert(#KOC.inputs == coordinates and #KOC.inputs < #tok_placement, "tiktok: exceed tok_placement")
-    local tik_placement = {}
-    for i, v in ipairs(KOC.inputs) do
-        assert(v.data.id and #v.data.program > 0, "tiktok: only accept programmed card")
-        assert(coordinates[1].y == TIK_START_Y, "tiktok: invalid tik coordinate")
-        table.insert(tik_placement, {
-            card = v.data,
-            coordinate = coordinates[i]
-        })
-    end
-    local context = {
-        width = MAP_WIDTH,
-        height = MAP_HEIGHT,
-        direction = nil,
-        this = nil,
-        enemies = nil,
-    }
-    -- start battle runtime, default with no winner
-    local winner = 0;
-    math.randomseed(KOC.seeds[1], KOC.seeds[2])
-    for i = 1, KOC.global.max_rounds do
-        -- run tiktok
-        local tiker = tik_placement[math.random(#tik_placement)]
-        local tik, err = load(tiker.card.program)
-        if err == nil then
-            context.direction = TIK_DIRECTION
-            context.this = tiker
-            context.enemies = search_enemies(tiker, tok_placement)
-            local ok, coordinate = pcall(tik, context)
-            if ok then
-                tiker.coordinate = coordinate
-            end
-        end
-        local toker = tok_placement[math.random(#tok_placement)]
-        local tok, err = load(toker.card.program)
-        if err == nil then
-            context.direction = TOK_DIRECTION
-            context.this = toker
-            context.enemies = search_enemies(toker, tik_placement)
-            local ok, coordinate = pcall(tok, context)
-            if ok then
-                toker.coordinate = coordinate
-            end
-        end
-        -- check winner
-        for _, tiker in ipairs(tik_placement) do
-            if tiker.coordinate.y == TOK_CORE_Y then
-                winner = TIK
-            end
-        end
-        for _, toker in ipairs(tok_placement) do
-            if toker.coordinate.y == TIK_CORE_Y then
-                winner = TOK
-            end
-        end
-    end
-    -- generate battle receipt
     KOC.global.battle_count = KOC.global.battle_count + 1
-    local battle_receipt = {
-        battle_id = battle_id,
-        winner = winner,
-        tik_player = sender(),
-        tok_player = tok_placement.player,
-        randomseeds = KOC.seeds
-    }
     return {
-        global = KOC.global,
-        outputs = {
-            { owner = KOC.owner, data = battle_receipt }
-        }
+        global = KOC.global
     }
 end
