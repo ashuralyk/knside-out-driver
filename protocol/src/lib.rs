@@ -111,7 +111,7 @@ pub mod TestVars {
 
     // devnet
     pub const PROJECT_TYPE_ARGS: H256 =
-        h256!("0xe29acaaff10b646fa9ee0b46e4b1f0115920dd62cd247969553fe205bda91a2a");
+        h256!("0xfc03b799cd921255f48aaf28f36d613d8addfd8b3dadbc945d94f21a3d00a67b");
     pub const SECP256K1_TX_HASH: H256 =
         h256!("0xc6bffa9ca9a9dadfec83c0307eee18fe88e42a00d05068510d799e3e4ad3ee87");
     pub const KNSIDEOUT_TX_HASH: H256 =

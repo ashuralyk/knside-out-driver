@@ -112,7 +112,7 @@ local mint_card = function (baseline)
         weapon = WEAPON[math.random(#WEAPON)],
         skill = SKILL[math.random(#SKILL)],
         race = RACE[math.random(#RACE)],
-        tribe = TRIBE[math.random[#TRIBE]],
+        tribe = TRIBE[math.random(#TRIBE)],
     }
 end
 
@@ -202,14 +202,22 @@ function start_tiktok_battle()
     assert(#KOC.inputs == 2 and data(1).id and data(2).id, "tiktok: only accept two cards")
     assert(data(1).program and data(2).program, "tiktok: program needed")
 
-    local fn1, err = load(data(1).program)
+    local tik = data(1)
+    local tok = data(2)
+
+    local fn1, err = load(tik.program)
     assert(err == nil, "tiktok: bad program 1")
-    local fn2, err = load(data(2).program)
+    local fn2, err = load(tok.program)
     assert(err == nil, "tiktok: bad program 2")
 
+    local ok, pnft1 = pcall(fn1)
+    assert(ok, "tiktok: bad program 1")
+    local ok, pnft2 = pcall(fn2)
+    assert(ok, "tiktok: bad program 2")
+
     for round = 1, KOC.global.max_rounds do
-        pcall(fn1, round)
-        pcall(fn2, round)
+        pcall(pnft1, round, tik)
+        pcall(pnft2, round, tok)
     end
 
     KOC.global.battle_count = KOC.global.battle_count + 1
