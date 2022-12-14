@@ -41,7 +41,8 @@ trait KnsideRpc {
     async fn make_request_transaction_digest(
         &self,
         contract_call: String,
-        inputs: Vec<OutPoint>,
+        sender: Option<String>,
+        inputs: Option<Vec<OutPoint>>,
         candidates: Vec<String>,
         components: Vec<OutPoint>,
         project_type_args: H256,
@@ -134,7 +135,8 @@ impl<B: Backend + 'static> KnsideRpcServer for RpcServer<B> {
     async fn make_request_transaction_digest(
         &self,
         contract_call: String,
-        inputs: Vec<OutPoint>,
+        sender: Option<String>,
+        inputs: Option<Vec<OutPoint>>,
         candidates: Vec<String>,
         components: Vec<OutPoint>,
         project_type_args: H256,
@@ -144,7 +146,22 @@ impl<B: Backend + 'static> KnsideRpcServer for RpcServer<B> {
             contract_call
         );
         let mut backend = self.ctx.backend.lock().await;
-        let inputs = inputs.iter().map(|v| v.clone().into()).collect::<Vec<_>>();
+        if sender.is_none() && inputs.is_none() || sender.is_some() && inputs.is_some() {
+            return Err(Error::Custom(
+                "sender and inputs are mutually exclusive".to_owned(),
+            ));
+        }
+        let input = if let Some(address) = sender {
+            KoRequestInput::Address(address)
+        } else {
+            KoRequestInput::Outpoints(
+                inputs
+                    .unwrap()
+                    .iter()
+                    .map(|v| v.clone().into())
+                    .collect::<Vec<_>>(),
+            )
+        };
         let components = components
             .iter()
             .map(|v| v.clone().into())
@@ -152,9 +169,9 @@ impl<B: Backend + 'static> KnsideRpcServer for RpcServer<B> {
         let (digest, payment_ckb) = backend
             .create_project_request_digest(
                 contract_call,
-                KoRequestInput::Outpoints(inputs),
-                components.as_slice(),
-                candidates.as_slice(),
+                input,
+                &components,
+                &candidates,
                 &project_type_args,
                 &self.ctx.project_deps,
             )
@@ -253,7 +270,10 @@ impl<B: Backend + 'static> KnsideRpcServer for RpcServer<B> {
         address: String,
         project_type_args: H256,
     ) -> RpcResult<KoFetchPersonalDataResponse> {
-        log::debug!("[RPC] receive `fetch_global_data` rpc call <= {}", address);
+        log::debug!(
+            "[RPC] receive `fetch_personal_data` rpc call <= {}",
+            address
+        );
         let personal_data = self
             .ctx
             .backend

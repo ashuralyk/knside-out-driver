@@ -12,7 +12,9 @@ use ko_protocol::serde_json::to_string;
 use ko_protocol::tokio::sync::mpsc::unbounded_channel;
 use ko_protocol::traits::{Backend, CkbClient, ContextRpc};
 use ko_protocol::types::backend::KoRequestInput;
-use ko_protocol::{async_trait, hex, mol_identity, KoResult, ProjectDeps, H256};
+use ko_protocol::{
+    async_trait, hex, is_mol_request_identity, mol_identity, KoResult, ProjectDeps, H256,
+};
 
 #[cfg(test)]
 mod tests;
@@ -435,7 +437,7 @@ impl<C: CkbClient, R: ContextRpc> Backend for BackendImpl<C, R> {
                     let tx = Transaction::from(tx.inner).into_view();
                     if let Some(cell) = tx.output(0) {
                         if cell.lock().code_hash() == project_deps.project_code_hash.pack()
-                            && cell.lock().args().get(0) == Some(2u8.into())
+                            && is_mol_request_identity(&cell.lock().args().raw_data())
                         {
                             find = true;
                         }

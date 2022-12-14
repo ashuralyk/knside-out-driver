@@ -106,7 +106,6 @@ impl Executor for ExecutorImpl {
             let context: Table = luac!(lua.globals().get("KOC"));
             let global_table: Table = luac!(context.get("global"));
             let data = serde_json::to_string(&global_table).expect("execute global");
-            println!("global_data = {}", data);
             Bytes::from(data.as_bytes().to_vec())
         };
 
@@ -144,7 +143,7 @@ impl Executor for ExecutorImpl {
         luac!(context.set("ckb_withdraw", ckb_withdraw));
         luac!(lua.globals().set("KOC", context));
 
-        // run request and trigger ckb_cost function if it exists
+        // run request and trigger ckb_deposit/ckb_withdraw function if it exists
         let mut global_driver = global_cell.lock_script.clone();
         helper::run_request(&lua, project_owner, &mut global_driver, &request, 0)?;
 

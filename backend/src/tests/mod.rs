@@ -112,7 +112,7 @@ async fn request_project_request_cell() {
     let mut backend = BackendImpl::new(&rpc_client, MockContextRpc::default());
     // let function_call =
     //     "set_card_program(\"return function(r, t) print(\'round: \' .. r, t.race) end\")".into();
-    let function_call = "start_tiktok_battle()".into();
+    let function_call = "open_box()".into();
     let previous_cells = {
         // backend
         //     .search_personal_data(
@@ -125,16 +125,10 @@ async fn request_project_request_cell() {
         //     .into_iter()
         //     .map(|(_, outpoint)| outpoint)
         //     .collect::<Vec<_>>()
-        vec![
-            OutPoint::new(
-                h256!("0x7a86da29ed590b9fec24c1188d51520c7d7ed8b100a1fa5054e3226ab03f59c4").pack(),
-                1,
-            ),
-            OutPoint::new(
-                h256!("0x7a86da29ed590b9fec24c1188d51520c7d7ed8b100a1fa5054e3226ab03f59c4").pack(),
-                2,
-            ),
-        ]
+        vec![OutPoint::new(
+            h256!("0xfe14b9dc656e621d1108aa475028cf8a3589e91c4c66ae04a41ca2378e8cb3ab").pack(),
+            1,
+        )]
     };
     println!("previous = {:?}", previous_cells);
     let mut request_input = KoRequestInput::Address(OWNER_ADDRESS.into());

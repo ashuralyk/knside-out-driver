@@ -57,7 +57,7 @@ fn koc_fill_components(lua: &Lua, context: &Table, components: &[Bytes]) -> KoRe
     Ok(())
 }
 
-fn koc_extract_outputs(lua: &Lua, method_call: &String) -> KoResult<Vec<(String, Option<Bytes>)>> {
+fn koc_extract_outputs(lua: &Lua, method_call: &str) -> KoResult<Vec<(String, Option<Bytes>)>> {
     let outputs: Table = luac!(lua.globals().get("__outputs__"));
     let outputs = outputs
         .sequence_values::<Table>()
@@ -76,7 +76,7 @@ fn koc_extract_outputs(lua: &Lua, method_call: &String) -> KoResult<Vec<(String,
                         Some(Bytes::from(data.as_bytes().to_vec()))
                     }
                     _ => Err(ExecutorError::ErrorLoadRequestLuaCode(
-                        method_call.clone(),
+                        method_call.to_owned(),
                         "output_data should be nil or table".into(),
                     ))?,
                 }
@@ -131,7 +131,7 @@ fn apply_function_call_result(lua: &Lua, result: &Value) -> KoResult<()> {
             }
             Ok(())
         }
-        _ => return Err(ExecutorError::UnexpectedFunctionCallResult.into()),
+        _ => Err(ExecutorError::UnexpectedFunctionCallResult.into()),
     }
 }
 
@@ -141,7 +141,7 @@ pub fn apply_randomseed(lua: &Lua, randomseeds: &[i64; 2]) -> KoResult<()> {
     luac!(randomseed.call((randomseeds[0], randomseeds[1])));
     // inject randomseeds
     let context: Table = luac!(lua.globals().get("KOC"));
-    luac!(context.set("seeds", randomseeds.clone()));
+    luac!(context.set("seeds", *randomseeds));
     Ok(())
 }
 

@@ -2,6 +2,7 @@ use std::str::FromStr;
 
 use ko_backend::BackendImpl;
 use ko_protocol::ckb_jsonrpc_types::OutPoint;
+use ko_protocol::ckb_types::h256;
 use ko_protocol::secp256k1::{Message, SecretKey};
 use ko_protocol::types::server::*;
 use ko_protocol::{ckb_sdk::SECP256K1, ckb_types::H256, hex, tokio, TestVars::*};
@@ -37,10 +38,11 @@ async fn send_make_request_digest() {
             .request(
                 "ko_makeRequestTransactionDigest",
                 rpc_params!(
-                    String::from(OWNER_ADDRESS),
-                    String::from("battle_win()"),
-                    Option::<String>::None,
-                    Option::<OutPoint>::None,
+                    "battle_win()".to_owned(),
+                    OWNER_ADDRESS.to_owned(),
+                    Option::<Vec<OutPoint>>::None,
+                    Vec::<String>::new(),
+                    Vec::<OutPoint>::new(),
                     PROJECT_TYPE_ARGS
                 ),
             )
@@ -58,10 +60,18 @@ async fn call_contract_method() {
             .request(
                 "ko_makeRequestTransactionDigest",
                 rpc_params!(
-                    String::from(OWNER_ADDRESS),
-                    String::from("withdraw(100)"),
+                    "open_box()".to_owned(),
+                    // OWNER_ADDRESS.to_owned(),
                     Option::<String>::None,
-                    Option::<OutPoint>::None,
+                    vec![OutPoint {
+                        tx_hash: h256!(
+                            "0x51f351fd89e9a4b99580ebdbab4e06707e3bb48f0bee9f28ace524e9acae8cf1"
+                        ),
+                        index: 1.into(),
+                    }],
+                    // Option::<Vec<OutPoint>>::None,
+                    Vec::<String>::new(),
+                    Vec::<OutPoint>::new(),
                     PROJECT_TYPE_ARGS
                 ),
             )

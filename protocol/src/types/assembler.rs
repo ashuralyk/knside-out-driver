@@ -4,7 +4,7 @@ use derive_more::Constructor;
 
 use super::context::KoContextGlobalCell;
 
-#[derive(Constructor)]
+#[derive(Constructor, Debug)]
 pub struct KoRequest {
     pub function_call: Bytes,
     pub inputs: Vec<(Script, Bytes)>,
