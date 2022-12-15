@@ -28,7 +28,7 @@ fn sign(ctx: &ContextImpl<impl CkbClient>, tx: TransactionView) -> [u8; 65] {
 
 #[tokio::test]
 async fn deploy_project_deployment_cell() {
-    let lua_code = std::fs::read_to_string("./src/tests/tiktok.lua").unwrap();
+    let lua_code = std::fs::read_to_string("./src/tests/tiktok/tiktok.lua").unwrap();
 
     // create digest
     let rpc_client = RpcClient::new(CKB_URL, CKB_INDEXER_URL);
@@ -64,7 +64,7 @@ async fn deploy_project_deployment_cell() {
 
 #[tokio::test]
 async fn update_project_deployment_cell() {
-    let lua_code = std::fs::read_to_string("./src/tests/tiktok.lua").unwrap();
+    let lua_code = std::fs::read_to_string("./src/tests/tiktok/tiktok.lua").unwrap();
 
     // create digest
     let rpc_client = RpcClient::new(CKB_URL, CKB_INDEXER_URL);
