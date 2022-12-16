@@ -5,7 +5,9 @@
   "main": "index.ts",
   "scripts": {
     "get:boxes": "ts-node tests/get_boxes.ts",
-    "get:cards": "ts-node tests/get_cards.ts"
+    "get:cards": "ts-node tests/get_cards.ts",
+    "send:purchase": "ts-node tests/purchase_box.ts",
+    "send:open": "ts-node tests/open_box.ts"
   },
   "author": "",
   "license": "ISC",
@@ -14,6 +16,7 @@
     "typescript": "^4.9.4"
   },
   "dependencies": {
+    "@ckb-lumos/hd": "^0.19.0",
     "axios": "^1.2.1"
   }
 }

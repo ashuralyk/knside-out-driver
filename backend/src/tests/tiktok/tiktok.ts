@@ -1,4 +1,5 @@
 import Axios from "axios";
+import { key as Secp256k1 } from "@ckb-lumos/hd";
 
 interface Box {
   box_id: number;
@@ -36,6 +37,11 @@ interface PerosnalRawItem {
   outpoint: RawOutpoint;
 }
 
+interface PurchaseBoxResult {
+  digest: string;
+  payment: string;
+}
+
 type TxHash = string;
 
 export default class Client {
@@ -71,8 +77,8 @@ export default class Client {
 
   private async make_transaction_digest(
     call_func: string,
-    outpoints: Array<Outpoint> | null
-  ): Promise<string> {
+    outpoints: Array<RawOutpoint> | null
+  ): Promise<any> {
     let sender: string | null = this.address;
     if (outpoints !== null) {
       sender = null;
@@ -85,21 +91,23 @@ export default class Client {
       components: [],
       project_type_args: this.project_typeargs,
     });
-    console.log(response);
     if (response.status != 200 || response.data.result === undefined) {
-      throw "bad jsonrpc call";
+      throw response.data.error;
     }
     return response.data.result;
   }
 
   private async send_transaction(digest: string): Promise<TxHash> {
-    let signature = "0xaadadsd"; // todo
+    if (!digest.startsWith("0x")) {
+      digest = "0x" + digest;
+    }
+    let signature = Secp256k1.signRecoverable(digest, this.privkey).slice(2);
     let response = await this.request("ko_sendTransactionSignature", {
       digest,
       signature,
     });
     if (response.status != 200 || response.data.result === undefined) {
-      throw "bad jsonrpc call";
+      throw response.data.error;
     }
     return response.data.result;
   }
@@ -110,9 +118,16 @@ export default class Client {
       project_type_args: this.project_typeargs,
     });
     if (response.status != 200 || response.data.result === undefined) {
-      throw "bad jsonrpc call";
+      throw response.data.error;
     }
     return response.data.result.data;
+  }
+
+  private raw_outpoint(outpoint: Outpoint): RawOutpoint {
+    return {
+      tx_hash: outpoint.tx_hash,
+      index: "0x" + outpoint.index.toString(16),
+    };
   }
 
   public async wait_transaction_committed(
@@ -123,41 +138,46 @@ export default class Client {
       project_type_args: this.project_typeargs,
     });
     if (response.status != 200 || response.data.result === undefined) {
-      throw "bad jsonrpc call";
+      throw response.data.error;
     }
     return response.data.result;
   }
 
   public async purchase_box(): Promise<TxHash> {
-    let digest = await this.make_transaction_digest("purchase_box()", null);
-    return await this.send_transaction(digest);
+    let result: PurchaseBoxResult = await this.make_transaction_digest(
+      "purchase_box()",
+      null
+    );
+    return await this.send_transaction(result.digest);
   }
 
   public async open_box(box: Outpoint): Promise<TxHash> {
-    let digest = await this.make_transaction_digest("open_box()", [box]);
-    return await this.send_transaction(digest);
+    let result = await this.make_transaction_digest("open_box()", [
+      this.raw_outpoint(box),
+    ]);
+    return await this.send_transaction(result.digest);
   }
 
   public async upload_card_program(
     card: Outpoint,
     program: string
   ): Promise<TxHash> {
-    let digest = await this.make_transaction_digest(
+    let result = await this.make_transaction_digest(
       `set_card_program(${program})`,
-      [card]
+      [this.raw_outpoint(card)]
     );
-    return await this.send_transaction(digest);
+    return await this.send_transaction(result.digest);
   }
 
   public async start_tiktok_battle(
     card1: Outpoint,
     card2: Outpoint
   ): Promise<TxHash> {
-    let digest = await this.make_transaction_digest(`start_tiktok_battle()`, [
-      card1,
-      card2,
+    let result = await this.make_transaction_digest(`start_tiktok_battle()`, [
+      this.raw_outpoint(card1),
+      this.raw_outpoint(card2),
     ]);
-    return await this.send_transaction(digest);
+    return await this.send_transaction(result.digest);
   }
 
   public async get_boxes(): Promise<Array<PerosnalItem>> {
