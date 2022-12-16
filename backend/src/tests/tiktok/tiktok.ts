@@ -21,12 +21,21 @@ interface Outpoint {
   index: number;
 }
 
+interface RawOutpoint {
+  tx_hash: string;
+  index: string;
+}
+
 interface PerosnalItem {
   data: Box | Card;
   outpoint: Outpoint;
 }
 
-type PersonalData = Array<PerosnalItem>;
+interface PerosnalRawItem {
+  data: string;
+  outpoint: RawOutpoint;
+}
+
 type TxHash = string;
 
 export default class Client {
@@ -49,7 +58,7 @@ export default class Client {
       {
         jsonrpc: "2.0",
         method,
-        params: [param],
+        params: param,
         id: 1,
       },
       {
@@ -77,7 +86,7 @@ export default class Client {
       project_type_args: this.project_typeargs,
     });
     console.log(response);
-    if (response.status != 200) {
+    if (response.status != 200 || response.data.result === undefined) {
       throw "bad jsonrpc call";
     }
     return response.data.result;
@@ -89,23 +98,21 @@ export default class Client {
       digest,
       signature,
     });
-    console.log(response);
-    if (response.status != 200) {
+    if (response.status != 200 || response.data.result === undefined) {
       throw "bad jsonrpc call";
     }
     return response.data.result;
   }
 
-  private async fetch_perosnal_data(): Promise<PersonalData> {
+  private async fetch_perosnal_data(): Promise<Array<PerosnalRawItem>> {
     let response = await this.request("ko_fetchPersonalData", {
       address: this.address,
       project_type_args: this.project_typeargs,
     });
-    console.log(response);
-    if (response.status != 200) {
+    if (response.status != 200 || response.data.result === undefined) {
       throw "bad jsonrpc call";
     }
-    return JSON.parse(response.data.result);
+    return response.data.result.data;
   }
 
   public async wait_transaction_committed(
@@ -115,11 +122,10 @@ export default class Client {
       request_hash: hash,
       project_type_args: this.project_typeargs,
     });
-    console.log(response);
-    if (response.status != 200) {
+    if (response.status != 200 || response.data.result === undefined) {
       throw "bad jsonrpc call";
     }
-    return JSON.parse(response.data.result);
+    return response.data.result;
   }
 
   public async purchase_box(): Promise<TxHash> {
@@ -155,27 +161,43 @@ export default class Client {
   }
 
   public async get_boxes(): Promise<Array<PerosnalItem>> {
-    let boxes_and_cards = await this.fetch_perosnal_data();
-    console.log("personal =", boxes_and_cards);
-    let boxes = new Array();
-    boxes_and_cards.forEach((item) => {
-      if ((item.data as Box).box_id !== undefined) {
-        boxes.push(item);
-      }
-    });
-    return boxes;
+    let personal_items = await this.fetch_perosnal_data();
+    return personal_items
+      .map((item) => {
+        let nft = JSON.parse(item.data);
+        if (nft.box_id !== undefined) {
+          return {
+            data: nft as Box,
+            outpoint: {
+              tx_hash: item.outpoint.tx_hash,
+              index: parseInt(item.outpoint.index, 16),
+            },
+          };
+        } else {
+          return null;
+        }
+      })
+      .filter((item) => item !== null);
   }
 
-  public async get_cards(): Promise<Array<Card>> {
-    let boxes_and_cards = await this.fetch_perosnal_data();
-    console.log("personal =", boxes_and_cards);
-    let cards = new Array();
-    boxes_and_cards.forEach((item) => {
-      if ((item.data as Card).id !== undefined) {
-        cards.push(item);
-      }
-    });
-    return cards;
+  public async get_cards(): Promise<Array<PerosnalItem>> {
+    let personal_items = await this.fetch_perosnal_data();
+    return personal_items
+      .map((item) => {
+        let nft = JSON.parse(item.data);
+        if (nft.id !== undefined) {
+          return {
+            data: nft as Card,
+            outpoint: {
+              tx_hash: item.outpoint.tx_hash,
+              index: parseInt(item.outpoint.index, 16),
+            },
+          };
+        } else {
+          return null;
+        }
+      })
+      .filter((item) => item !== null);
   }
 }
 

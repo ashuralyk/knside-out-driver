@@ -4,7 +4,8 @@
   "description": "",
   "main": "index.ts",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "get:boxes": "ts-node tests/get_boxes.ts",
+    "get:cards": "ts-node tests/get_cards.ts"
   },
   "author": "",
   "license": "ISC",

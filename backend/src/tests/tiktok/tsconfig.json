@@ -1,0 +1,7 @@
+{
+    "compilerOptions": {
+        "lib": ["es6", "DOM"],
+        "target": "es6",
+        "moduleResolution": "node",
+    }
+}
