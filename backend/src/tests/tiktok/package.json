@@ -7,7 +7,9 @@
     "get:boxes": "ts-node tests/get_boxes.ts",
     "get:cards": "ts-node tests/get_cards.ts",
     "send:purchase": "ts-node tests/purchase_box.ts",
-    "send:open": "ts-node tests/open_box.ts"
+    "send:open": "ts-node tests/open_box.ts",
+    "send:upload": "ts-node tests/upload_program.ts",
+    "send:battle": "ts-node tests/start_battle.ts"
   },
   "author": "",
   "license": "ISC",
