@@ -106,7 +106,7 @@ impl<C: CkbClient, R: ContextRpc> Backend for BackendImpl<C, R> {
             filter: None,
         };
         let (inputs, inputs_capacity) =
-            helper::fetch_live_cells(&self.rpc_client, search, 0, outputs_capacity).await?;
+            helper::fetch_live_cells(&self.rpc_client, search, 0, outputs_capacity, &[]).await?;
         if inputs_capacity < outputs_capacity {
             return Err(BackendError::InternalTransactionAssembleError.into());
         }
@@ -214,9 +214,14 @@ impl<C: CkbClient, R: ContextRpc> Backend for BackendImpl<C, R> {
             script_type: ScriptType::Lock,
             filter: None,
         };
-        let (mut inputs, inputs_capacity) =
-            helper::fetch_live_cells(&self.rpc_client, search, inputs_capacity, outputs_capacity)
-                .await?;
+        let (mut inputs, inputs_capacity) = helper::fetch_live_cells(
+            &self.rpc_client,
+            search,
+            inputs_capacity,
+            outputs_capacity,
+            &[],
+        )
+        .await?;
         if inputs_capacity < outputs_capacity {
             return Err(BackendError::InternalTransactionAssembleError.into());
         }
@@ -336,7 +341,10 @@ impl<C: CkbClient, R: ContextRpc> Backend for BackendImpl<C, R> {
                 )
                 .await;
             if success {
-                receiver.recv().await.unwrap()?
+                receiver
+                    .recv()
+                    .await
+                    .unwrap_or(Result::<u64, _>::Ok(0u64))?
             } else {
                 0u64
             }
@@ -375,9 +383,14 @@ impl<C: CkbClient, R: ContextRpc> Backend for BackendImpl<C, R> {
             script_type: ScriptType::Lock,
             filter: None,
         };
-        let (mut extra_inputs, inputs_capacity) =
-            helper::fetch_live_cells(&self.rpc_client, search, inputs_capacity, outputs_capacity)
-                .await?;
+        let (mut extra_inputs, inputs_capacity) = helper::fetch_live_cells(
+            &self.rpc_client,
+            search,
+            inputs_capacity,
+            outputs_capacity,
+            &inputs,
+        )
+        .await?;
         inputs.append(&mut extra_inputs);
 
         // rebuild change output

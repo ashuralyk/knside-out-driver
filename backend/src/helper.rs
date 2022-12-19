@@ -69,9 +69,14 @@ pub async fn fetch_live_cells(
     search_key: SearchKey,
     mut inputs_capacity: u64,
     outputs_capacity: u64,
+    except_inputs: &[CellInput],
 ) -> KoResult<(Vec<CellInput>, u64)> {
     let mut inputs = vec![];
     let mut after = None;
+    let except_outpoints = except_inputs
+        .iter()
+        .map(|input| input.previous_output())
+        .collect::<Vec<_>>();
     while inputs_capacity < outputs_capacity {
         let result = rpc
             .fetch_live_cells(search_key.clone(), 10, after)
@@ -80,7 +85,11 @@ pub async fn fetch_live_cells(
         result
             .objects
             .into_iter()
-            .filter(|cell| cell.output.type_.is_none() && cell.output_data.is_empty())
+            .filter(|cell| {
+                cell.output.type_.is_none()
+                    && cell.output_data.is_empty()
+                    && !except_outpoints.contains(&cell.out_point.clone().into())
+            })
             .for_each(|cell| {
                 if inputs_capacity < outputs_capacity {
                     inputs.push(
@@ -108,7 +117,7 @@ pub async fn fetch_cell_by_script(
         script_type: ScriptType::Lock,
         filter: None,
     };
-    let (cells, ckb) = fetch_live_cells(rpc, search, 0, 1).await?;
+    let (cells, ckb) = fetch_live_cells(rpc, search, 0, 1, &[]).await?;
     if cells.is_empty() {
         return Err(BackendError::MissInputCell.into());
     }

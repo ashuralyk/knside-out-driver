@@ -107,7 +107,7 @@ impl<C: CkbClient> Driver for DriverImpl<C> {
             } else {
                 let tip = self.rpc_client.get_tip_header().await.unwrap();
                 let tip_number: u64 = tip.inner.number.into();
-                if tip_number > block_number + confirms as u64 {
+                if tip_number >= block_number + confirms as u64 {
                     break;
                 }
             }
