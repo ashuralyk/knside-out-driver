@@ -246,6 +246,10 @@ pub async fn fill_transaction_capacity_diff(
             .await
             .map_err(|_| AssemblerError::MissProjectRequestCell)?;
         let cell = &result.objects[0];
+        if cell.output.type_.is_some() {
+            after = Some(result.last_cursor);
+            continue;
+        }
         let capacity: u64 = cell.output.capacity.into();
         searched_capacity += capacity;
         cells.push(

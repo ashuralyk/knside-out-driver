@@ -107,7 +107,7 @@ pub mod TestVars {
     pub const SECP256K1_TX_HASH: H256 =
         h256!("0xf8de3bb47d055cdf460d93a2a6e1b05f7432f9777c8c474abf4eec1d4aee5d37");
     pub const KNSIDEOUT_TX_HASH: H256 =
-        h256!("0x54a48637c97de0daf1c9f5318fbcf336d5170d1e784c1aabf83edddff7961385");
+        h256!("0x416e5e0d4925ab21831920741866d994b0c5a2a22689d0d8c994d23e4556b554");
 
     // devnet
     // pub const PROJECT_TYPE_ARGS: H256 =
