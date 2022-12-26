@@ -118,6 +118,15 @@ async fn call_contract_method() {
 }
 
 #[tokio::test]
+async fn send_start_dirver_mangement() {
+    create_server_and_client(false)
+        .await
+        .request("ko_manageGlobalDataDriver", rpc_params!(PROJECT_TYPE_ARGS))
+        .await
+        .expect("server response")
+}
+
+#[tokio::test]
 async fn send_fetch_global_data() {
     // send client request
     let response: String = create_server_and_client(false)

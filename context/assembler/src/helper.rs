@@ -246,7 +246,7 @@ pub async fn fill_transaction_capacity_diff(
             .await
             .map_err(|_| AssemblerError::MissProjectRequestCell)?;
         let cell = &result.objects[0];
-        if cell.output.type_.is_some() {
+        if cell.output.type_.is_some() || !cell.output_data.is_empty() {
             after = Some(result.last_cursor);
             continue;
         }

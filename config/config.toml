@@ -8,10 +8,10 @@ project_manager_privkey = "0x8d929e962f940f75aa32054f19a5ea2ce70ae30bfe4ff7cf2db
 project_code_hash = "0x05d0e558c42c8f52d0addc2dee8dda669b66637650c4e8a0c3845c5c1f395ece"
 
 # url for connecting CKB node e.g. https://testnet.ckbapp.dev/
-ckb_url = "http://127.0.0.1:8114"
+ckb_url = "https://testnet.ckbapp.dev/"
 
 # url for connecting ckb indexer service
-ckb_indexer_url = "http://127.0.0.1:8116"
+ckb_indexer_url = "https://testnet.ckbapp.dev/"
 
 # endpoint for running rpc server
 rpc_endpoint = "0.0.0.0:8090"
@@ -26,7 +26,7 @@ project_cell_deps = [
     # secp256k1
     { transaction_hash = "0xf8de3bb47d055cdf460d93a2a6e1b05f7432f9777c8c474abf4eec1d4aee5d37", cell_index = 0, dep_type = 1 },
     # knside-out
-    { transaction_hash = "0x416e5e0d4925ab21831920741866d994b0c5a2a22689d0d8c994d23e4556b554", cell_index = 0, dep_type = 0 },
+    { transaction_hash = "0xc01780486cd348032cd3cf2a7735f1849004934729ce78ae0717b7df5f3f4ca2", cell_index = 0, dep_type = 0 },
 ]
 
 [drive_settings]

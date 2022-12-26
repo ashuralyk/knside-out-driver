@@ -91,8 +91,11 @@ pub mod TestVars {
     use crate::{lazy_static, ProjectDeps};
     use std::str::FromStr;
 
-    pub const CKB_URL: &str = "http://127.0.0.1:8114/";
-    pub const CKB_INDEXER_URL: &str = "http://127.0.0.1:8116/";
+    // pub const CKB_URL: &str = "http://127.0.0.1:8114/";
+    // pub const CKB_INDEXER_URL: &str = "http://127.0.0.1:8116/";
+
+    pub const CKB_URL: &str = "https://testnet.ckbapp.dev/";
+    pub const CKB_INDEXER_URL: &str = "https://testnet.ckbapp.dev/";
 
     pub const OWNER_PRIVATE_KEY: H256 =
         h256!("0x8d929e962f940f75aa32054f19a5ea2ce70ae30bfe4ff7cf2dbed70d556265df");
@@ -103,11 +106,11 @@ pub mod TestVars {
 
     // testnet
     pub const PROJECT_TYPE_ARGS: H256 =
-        h256!("0x6f7efd4a0dea388dcd260b97dce553b6ef75551aa3bea412e40686689880a70f");
+        h256!("0x6374a5f87336af0bb2b7e89ad6e99ea92101c848c9dc7913057d2647699e3a5b");
     pub const SECP256K1_TX_HASH: H256 =
         h256!("0xf8de3bb47d055cdf460d93a2a6e1b05f7432f9777c8c474abf4eec1d4aee5d37");
     pub const KNSIDEOUT_TX_HASH: H256 =
-        h256!("0x416e5e0d4925ab21831920741866d994b0c5a2a22689d0d8c994d23e4556b554");
+        h256!("0xc01780486cd348032cd3cf2a7735f1849004934729ce78ae0717b7df5f3f4ca2");
 
     // devnet
     // pub const PROJECT_TYPE_ARGS: H256 =

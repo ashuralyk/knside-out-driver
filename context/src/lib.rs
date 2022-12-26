@@ -135,6 +135,11 @@ impl<C: CkbClient> ContextImpl<C> {
         if receipt.requests.is_empty() {
             return Ok(None);
         }
+        log::info!(
+            "[{}] start to assemble knside-out transaction, requests count = {}",
+            self.assembler.get_project_args(),
+            receipt.requests.len()
+        );
         let mut total_inputs_capacity = receipt.global_cell.capacity;
         let personal_outputs = self.executor.execute_lua_requests(
             &mut receipt.global_cell,

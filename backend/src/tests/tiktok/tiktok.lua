@@ -91,15 +91,15 @@ end
 
 local get_card_program_limit = function (level)
     if level == 1 then
-        return 50
+        return 85
     elseif level == 2 then
-        return 75
-    elseif level == 3 then
-        return 100
-    elseif level == 4 then
         return 125
+    elseif level == 3 then
+        return 175
+    elseif level == 4 then
+        return 225
     else
-        return 150
+        return 350
     end
 end
 
